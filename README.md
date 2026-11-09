@@ -1,5 +1,9 @@
 # 随机抽取器（Random Select）
 
+> **AI 生成提示**
+>
+> 本项目的大部分代码、文档与界面素材由 AI（DeepSeek）生成或辅助生成，可能存在错误、遗漏或不合理的实现。使用前请自行评估风险；发现问题欢迎反馈。
+
 一款面向 Windows 的随机抽取工具，支持卡池管理、加权随机、抽卡动画、历史记录、抽取报告与封面编辑。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -58,7 +62,6 @@ dotnet publish "Random Select.csproj" -c Release -r win-x64 --self-contained fal
 | --- | --- |
 | 根目录 | 3.75.2 源码（WPF / .NET 10） |
 | `backup/` | 历史版本源码快照（3.9.3 至 3.75.0） |
-| `Release/Random-Select-3.75.2.exe` | 当前发布包 |
 | `Readme/更新日志.txt` | 更新日志（编译时内嵌到程序） |
 | `CHANGELOG.txt` | 更新日志的可读副本 |
 | `LICENSE` | MIT 许可证 |

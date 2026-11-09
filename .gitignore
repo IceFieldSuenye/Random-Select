@@ -11,9 +11,16 @@ Readme/*
 Test/
 Pre-Delete/
 
-# ---- Release 目录：只保留指定的 3.75.2 发布包 ----
+# ---- GitHub 发布目录：只保留指定的 exe ----
 Release/*
 !Release/Random-Select-3.75.2.exe
+
+# ---- 本地发布目录（不上传）----
+Release-DSH/
+
+# ---- 旧版本源码中的 slnx 与旧发布目录（不上传）----
+*.slnx
+backup/**/Release/
 
 # ---- 历史备份中的构建产物与本机配置 ----
 backup/**/bin/
