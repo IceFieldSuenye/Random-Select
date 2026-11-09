@@ -1,0 +1,28 @@
+<local:FloatingDialogBase x:Class="RandomDrawer.AiInfoDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RandomDrawer"
+        Title="DeepSeek-V4.1-Flash" DialogWidth="680">
+    <Grid Margin="22,16,22,20" MinWidth="480">
+        <StackPanel>
+            <Border CornerRadius="8" ClipToBounds="True"
+                    Background="{DynamicResource Bg_F5F5F5}"
+                    BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              MaxHeight="430">
+                    <Image Name="PreviewImage" Stretch="Uniform" Margin="6"
+                           Source="pack://application:,,,/Assets/dsh-code.jpg"/>
+                </ScrollViewer>
+            </Border>
+
+            <Button Width="100" Height="32" HorizontalAlignment="Right" Margin="0,16,0,0"
+                    IsDefault="True" IsCancel="True" Click="Ok_Click">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="确定" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Grid>
+</local:FloatingDialogBase>

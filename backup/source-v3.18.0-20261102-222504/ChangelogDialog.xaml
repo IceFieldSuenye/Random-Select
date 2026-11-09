@@ -1,0 +1,26 @@
+<local:FloatingDialogBase x:Class="RandomDrawer.ChangelogDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RandomDrawer"
+        Title="更新日志" DialogWidth="580">
+    <Grid Margin="22,14,22,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer PanningMode="VerticalOnly" Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" MaxHeight="430" Padding="0,0,10,0">
+            <StackPanel Name="LogHost"/>
+        </ScrollViewer>
+
+        <Button Grid.Row="1" Width="90" Height="32" IsDefault="True"
+                HorizontalAlignment="Right" Margin="0,16,0,0" Click="Close_Click">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="&#xE73E;" FontFamily="{StaticResource AppIconFont}"
+                           FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBlock Text="确定" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Button>
+    </Grid>
+</local:FloatingDialogBase>

@@ -1,0 +1,648 @@
+
+<UserControl x:Class="RandomDrawer.MainPage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RandomDrawer">
+
+    <UserControl.Resources>
+        <!-- ★ 移除了“选中且悬浮”的覆盖触发器，保证选中状态下悬浮颜色不加深 -->
+        <Style x:Key="PoolButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Background" Value="{DynamicResource Bg_F0F0F0}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Bd_CCCCCC}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,6"/>
+            
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                SnapsToDevicePixels="True"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <!-- 选中状态：蓝底、蓝框、蓝字 -->
+                <Trigger Property="local:MainPage_UC.IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Bg_E5F3FF}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Bd_0078D7}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </Trigger>
+                <!-- 未选中且悬浮：边框和字体变蓝 -->
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsMouseOver" Value="True"/>
+                        <Condition Property="local:MainPage_UC.IsSelected" Value="False"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Bd_0078D7}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
+                </MultiTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Storyboard x:Key="SyncRingStoryboard" RepeatBehavior="Forever">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E1" Storyboard.TargetProperty="Opacity">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT1" Storyboard.TargetProperty="Angle">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E2" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.167">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT2" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.167">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E3" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.334">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT3" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.334">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E4" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.501">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT4" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.501">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E5" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.668">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT5" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.668">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.835">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT6" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.835">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <Storyboard x:Key="VideoLoadingStoryboard" RepeatBehavior="Forever">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="L1" Storyboard.TargetProperty="Opacity">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LRT1" Storyboard.TargetProperty="Angle">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="L2" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.167">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LRT2" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.167">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="L3" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.334">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LRT3" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.334">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="L4" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.501">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LRT4" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.501">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="L5" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.668">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LRT5" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.668">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="L6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.835">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="LRT6" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.835">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.13,0.21,0.1,0.7"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+    </UserControl.Resources>
+
+    <Grid Background="{DynamicResource Bg_FFFFFF}">
+        <Grid x:Name="MainContentRoot" Margin="8,8,8,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <!-- ★ 关键修复：将宽度从 150 扩大到 180，为边距和滚动条提供充足空间，保证按钮不缩窄 -->
+                <ColumnDefinition Width="180"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ★ 调整 Margin：左侧留 15，右侧留 10，完美呈现边距感 -->
+            <Grid x:Name="LeftPanelRoot" Grid.Row="0" Grid.Column="0" Margin="15,0,1,0">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="LeftPanelTransform"/>
+                </Grid.RenderTransform>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <TextBlock Text="&#xE715;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                    <TextBlock Text="卡池列表" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource Fg_333333}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Name="SyncIndicator" Orientation="Horizontal"
+                            Margin="0,0,0,8" Visibility="Collapsed">
+                    <Viewbox Width="20" Height="20" Margin="0,0,6,0">
+                        <Grid Width="100" Height="100">
+                            <Canvas x:Name="C1" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT1"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E1" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C2" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT2"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E2" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C3" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT3"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E3" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C4" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT4"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E4" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C5" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT5"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E5" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C6" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT6"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E6" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                        </Grid>
+                    </Viewbox>
+                    <TextBlock Text="同步中..." FontSize="13" Foreground="{DynamicResource Fg_0078D7}" VerticalAlignment="Center"/>
+            </StackPanel>
+
+                <!-- ★ 给 StackPanel 添加右侧 Margin，让按钮和滚动条之间产生 10px 的间隔 -->
+                <ScrollViewer PanningMode="VerticalOnly" Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                              Background="Transparent"
+                              PreviewMouseRightButtonDown="PoolListBlank_PreviewMouseRightButtonDown">
+                    <StackPanel Name="PoolButtonsPanel" Margin="0,0,10,0"/>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ★ 卡池列表与封面之间的分隔线 -->
+            <Border Grid.Row="0" Grid.Column="0" Width="1" HorizontalAlignment="Right"
+                    Background="{DynamicResource Bd_CCCCCC}" SnapsToDevicePixels="True"/>
+            <Border x:Name="CenterPanelRoot" Grid.Row="0" Grid.Column="1" Margin="10,0,0,0"
+                    Background="Transparent"
+                    PreviewMouseRightButtonDown="CenterPanelRoot_PreviewMouseRightButtonDown">
+                <Grid>
+                    <Rectangle Name="GrayPlaceholder" Fill="{DynamicResource Fl_D3D3D3}" Visibility="Visible"/>
+
+                    <StackPanel Name="EmptyStatePanel" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="当前未找到任何卡池。" FontSize="20" HorizontalAlignment="Center" Foreground="{DynamicResource Fg_000000}" Margin="0,0,0,18"/>
+                        <Button Width="170" Height="38" HorizontalAlignment="Center" Click="BtnNewPoolFromMain_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="新建卡池" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Width="170" Height="38" HorizontalAlignment="Center" Margin="0,10,0,0" Click="BtnImportPoolFromMain_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="导入卡池" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <Image Name="DisplayImage" Stretch="Uniform" Visibility="Collapsed"/>
+
+                    <TextBlock Name="TxtDefaultCoverName"
+                               Text=""
+                               FontSize="32"
+                               FontWeight="Bold"
+                               Foreground="#333333"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="600"
+                               Margin="20"
+                               IsHitTestVisible="False"
+                               Visibility="Collapsed">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="White" BlurRadius="8" ShadowDepth="0" Opacity="0.9"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+
+                    <MediaElement Name="DisplayVideoA" Stretch="Uniform" Visibility="Collapsed"
+                                  LoadedBehavior="Manual" UnloadedBehavior="Manual" IsMuted="True"
+                                  MediaOpened="DisplayVideo_MediaOpened" MediaEnded="DisplayVideo_MediaEnded"/>
+
+                    <MediaElement Name="DisplayVideoB" Stretch="Uniform" Visibility="Collapsed" Opacity="0"
+                                  LoadedBehavior="Manual" UnloadedBehavior="Manual" IsMuted="True"
+                                  MediaOpened="DisplayVideo_MediaOpened" MediaEnded="DisplayVideo_MediaEnded"/>
+
+                    <Border Name="VideoLoadingPanel"
+                            Background="{DynamicResource Bg_FFFFFF}" BorderBrush="{DynamicResource Bd_D0D0D0}" BorderThickness="1" CornerRadius="10"
+                            Padding="36,28" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Viewbox Width="60" Height="60" HorizontalAlignment="Center">
+                                <Grid Width="100" Height="100">
+                                    <Canvas x:Name="LC1" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                        <Canvas.RenderTransform>
+                                            <RotateTransform x:Name="LRT1"/>
+                                        </Canvas.RenderTransform>
+                                        <Ellipse x:Name="L1" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                                    </Canvas>
+                                    <Canvas x:Name="LC2" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                        <Canvas.RenderTransform>
+                                            <RotateTransform x:Name="LRT2"/>
+                                        </Canvas.RenderTransform>
+                                        <Ellipse x:Name="L2" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                                    </Canvas>
+                                    <Canvas x:Name="LC3" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                        <Canvas.RenderTransform>
+                                            <RotateTransform x:Name="LRT3"/>
+                                        </Canvas.RenderTransform>
+                                        <Ellipse x:Name="L3" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                                    </Canvas>
+                                    <Canvas x:Name="LC4" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                        <Canvas.RenderTransform>
+                                            <RotateTransform x:Name="LRT4"/>
+                                        </Canvas.RenderTransform>
+                                        <Ellipse x:Name="L4" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                                    </Canvas>
+                                    <Canvas x:Name="LC5" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                        <Canvas.RenderTransform>
+                                            <RotateTransform x:Name="LRT5"/>
+                                        </Canvas.RenderTransform>
+                                        <Ellipse x:Name="L5" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                                    </Canvas>
+                                    <Canvas x:Name="LC6" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                        <Canvas.RenderTransform>
+                                            <RotateTransform x:Name="LRT6"/>
+                                        </Canvas.RenderTransform>
+                                        <Ellipse x:Name="L6" Width="8" Height="8" Fill="{DynamicResource Fl_0078D7}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                                    </Canvas>
+                                </Grid>
+                            </Viewbox>
+                            <TextBlock Text="正在加载中..." FontSize="14" Foreground="{DynamicResource Fg_666666}"
+                                       HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid x:Name="BottomPanelRoot" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,4">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="BottomPanelTransform"/>
+                </Grid.RenderTransform>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Name="BtnOptions" VerticalAlignment="Center" Width="100" Height="40" Margin="0,0,10,0" Click="BtnOptions_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE713;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="选项" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Name="BtnHistory" VerticalAlignment="Center" Width="120" Height="40" Grid.Column="1" Margin="0,0,10,0" Click="BtnHistory_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE81C;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="历史记录" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Grid Name="BottomStatsGrid" Grid.Column="2" VerticalAlignment="Center" Margin="15,0,15,0" MinHeight="96">
+                    <StackPanel Name="PanelStatsNormal" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                            <CheckBox Name="ChkNoRepeat" Content="不重复抽取" FontSize="13"
+                                      VerticalAlignment="Center"
+                                      IsChecked="True" Click="ChkNoRepeat_Click"/>
+                            <TextBlock Name="TxtDrawCountNormal" Text="本次抽取次数：0" FontSize="13"
+                                       Foreground="{DynamicResource Fg_000000}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
+                        </StackPanel>
+
+                        <!-- ★ 重置 + 本次抽取详情：两行文本右侧，垂直排列，悬停显示淡灰底 -->
+<StackPanel Orientation="Vertical" Margin="18,0,0,0" VerticalAlignment="Center">
+                            <Border Name="TxtResetHyperlink" CornerRadius="4" Padding="9,2"
+                                    MouseLeftButtonDown="ResetText_Click" ToolTip="重置抽取记录">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE72C;"
+                                               FontFamily="{StaticResource AppIconFont}"
+                                               FontSize="14" Width="16" TextAlignment="Center"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource Fg_000000}"/>
+                                    <TextBlock Text="重置" FontSize="13" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Fg_000000}" Margin="4,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Name="TxtDrawDetailLink" Margin="0,4,0,0" CornerRadius="4" Padding="9,2"
+                                    MouseLeftButtonDown="DrawDetail_Click" ToolTip="查看本次抽取详情">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE721;"
+                                               FontFamily="{StaticResource AppIconFont}"
+                                               FontSize="14" Width="16" TextAlignment="Center"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource Fg_000000}"/>
+                                    <TextBlock Text="本次抽取详情" FontSize="13" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Fg_000000}" Margin="4,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Name="PanelStatsAdvanced" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Left" Visibility="Collapsed">
+                        <TextBlock Name="TxtDrawCountAdvanced" Text="累计抽取次数：0" FontSize="13" Foreground="{DynamicResource Fg_000000}" HorizontalAlignment="Left"/>
+                        <TextBlock Name="TxtPity5Info" Text="" FontSize="13" Foreground="{DynamicResource Fg_666666}" Margin="0,2,0,0" HorizontalAlignment="Left"/>
+                        <TextBlock Name="TxtPity4Info" Text="" FontSize="13" Foreground="{DynamicResource Fg_666666}" Margin="0,2,0,0" HorizontalAlignment="Left"/>
+                        <TextBlock Name="TxtPityExtraInfo" Text="" FontSize="13" Foreground="{DynamicResource Fg_666666}" Margin="0,2,0,0" HorizontalAlignment="Left" Visibility="Collapsed"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Column="3" Name="RightGrid" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Name="AnimColumn" Grid.Row="0" Grid.Column="0" Orientation="Vertical"
+                                VerticalAlignment="Center" Margin="0,0,8,0">
+                        <Border Padding="2,4" Margin="0,0,0,0"
+                                CornerRadius="6" Background="Transparent"
+                                Visibility="{Binding Visibility, ElementName=ChkDrawAnimation}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <CheckBox Name="ChkDrawAnimation" Grid.Row="0" Grid.Column="1" Content="抽取动画"
+                            Click="ChkDrawAnimation_Click"
+                            FontSize="13" VerticalAlignment="Center"
+                            Margin="0" IsChecked="True"
+                            Visibility="Collapsed">
+                            <CheckBox.RenderTransform>
+                            <TranslateTransform/>
+                            </CheckBox.RenderTransform>
+                            </CheckBox>
+                        </Border>
+
+                        <Button Name="BtnViewReport" VerticalAlignment="Center" Margin="0,2,0,0"
+                        Visibility="Collapsed" Click="BtnViewReport_Click" ToolTip="查看抽取报告">
+                        <Button.Style>
+                        <Style TargetType="Button">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="4,4"/>
+                        <Setter Property="Template">
+                        <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                        CornerRadius="6" Padding="{TemplateBinding Padding}"
+                        SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                        </Trigger>
+                        </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                        </Setter.Value>
+                        </Setter>
+                        </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource AppIconFont}"
+                        FontSize="14" VerticalAlignment="Center" Margin="0,0,7,0"
+                        Foreground="{DynamicResource Fg_333333}"/>
+                        <TextBlock Text="查看抽取报告" FontSize="13" VerticalAlignment="Center"
+                        Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- 查看抽取报告（仅启用高级抽卡规则的卡池显示，无边框样式） -->
+
+                    <Button Name="BtnDraw1" VerticalAlignment="Center" Grid.Row="0" Grid.Column="2" Width="120" Height="40" Click="BtnDraw1_Click">
+                        <Button.RenderTransform>
+                            <TranslateTransform/>
+                        </Button.RenderTransform>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA57;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="1次抽取" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+
+
+
+                <Button Name="BtnDrawMulti" VerticalAlignment="Center" Grid.Column="4" Width="120" Height="40" Click="BtnDrawMulti_Click">
+                    <Button.RenderTransform>
+                        <TranslateTransform/>
+                    </Button.RenderTransform>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xEA58;" FontFamily="{StaticResource AppIconFont}"
+                                   FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="多次抽取" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

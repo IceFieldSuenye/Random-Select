@@ -1,0 +1,172 @@
+<UserControl x:Class="RandomDrawer.CoverEditorPage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RandomDrawer">
+
+    <Grid x:Name="Root" Background="{DynamicResource Bg_FFFFFF}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 顶部工具栏：返回 / 导入 / 文本工具 / 画图工具 -->
+        <Grid Grid.Row="0" Margin="20,14,20,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="BtnBack" Grid.Column="0" Height="32" Padding="10,0"
+                    Click="BtnBack_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE72B;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="返回" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <Button x:Name="BtnImport" Grid.Column="1" Height="32" Padding="12,0" Margin="10,0,0,0"
+                    Click="BtnImport_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="导入" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <!-- 文本 / 画图工具 -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0"
+                        VerticalAlignment="Center">
+                <Border BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                        CornerRadius="6" Padding="6,3">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="BtnTextColor" Width="30" Height="26" Padding="0"
+                                Click="BtnTextColor_Click" Tag="文字颜色">
+                            <Border Width="16" Height="16" CornerRadius="3"
+                                    Background="{DynamicResource Fg_333333}"
+                                    BorderBrush="{DynamicResource Bd_CCCCCC}" BorderThickness="1"
+                                    x:Name="TextColorSwatch" HorizontalAlignment="Center"/>
+                        </Button>
+                        <ComboBox x:Name="ComboFontSize" Width="62" Height="26" Margin="4,0,0,0"
+                                  Style="{StaticResource AppComboBoxStyle}"
+                                  SelectionChanged="ComboFontSize_SelectionChanged">
+                            <ComboBoxItem Content="16"/>
+                            <ComboBoxItem Content="20"/>
+                            <ComboBoxItem Content="24"/>
+                            <ComboBoxItem Content="28"/>
+                            <ComboBoxItem Content="36"/>
+                            <ComboBoxItem Content="48"/>
+                        </ComboBox>
+                        <Button x:Name="BtnBold" Width="30" Height="26" Margin="4,0,0,0" Padding="0"
+                                Content="B" FontWeight="Bold" Click="BtnBold_Click" Tag="粗体"/>
+                        <Button x:Name="BtnItalic" Width="30" Height="26" Margin="4,0,0,0" Padding="0"
+                                Content="I" FontStyle="Italic" Click="BtnItalic_Click" Tag="斜体"/>
+                        <Button x:Name="BtnUnderline" Width="30" Height="26" Margin="4,0,0,0" Padding="0"
+                                Click="BtnUnderline_Click" Tag="下划线">
+                            <TextBlock Text="U" TextDecorations="Underline" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button x:Name="BtnStrike" Width="30" Height="26" Margin="4,0,0,0" Padding="0"
+                                Click="BtnStrike_Click" Tag="删除线">
+                            <TextBlock Text="S" TextDecorations="Strikethrough" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button x:Name="BtnHighlight" Width="32" Height="26" Margin="4,0,0,0" Padding="0"
+                                Click="BtnHighlight_Click" Tag="荧光笔">
+                            <Border Width="16" Height="12" CornerRadius="2" Background="#FFF7B2"
+                                    x:Name="HighlightSwatch" HorizontalAlignment="Center"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1" Margin="10,0,0,0"
+                        CornerRadius="6" Padding="6,3">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="BtnPen" Width="32" Height="26" Padding="0"
+                                Click="BtnPen_Click" Tag="画笔">
+                            <TextBlock Text="&#xE76D;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="14" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button x:Name="BtnPenColor" Width="30" Height="26" Margin="4,0,0,0" Padding="0"
+                                Click="BtnPenColor_Click" Tag="画笔颜色">
+                            <Border Width="16" Height="16" CornerRadius="3" Background="#FFE53935"
+                                    BorderBrush="{DynamicResource Bd_CCCCCC}" BorderThickness="1"
+                                    x:Name="PenColorSwatch" HorizontalAlignment="Center"/>
+                        </Button>
+                        <Button x:Name="BtnEraser" Width="32" Height="26" Margin="4,0,0,0" Padding="0"
+                                Click="BtnEraser_Click" Tag="橡皮擦">
+                            <TextBlock Text="&#xE75C;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="14" VerticalAlignment="Center"/>
+                        </Button>
+                        <ComboBox x:Name="ComboPenSize" Width="62" Height="26" Margin="4,0,0,0"
+                                  Style="{StaticResource AppComboBoxStyle}"
+                                  SelectionChanged="ComboPenSize_SelectionChanged">
+                            <ComboBoxItem Content="细"/>
+                            <ComboBoxItem Content="中"/>
+                            <ComboBoxItem Content="粗"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <TextBlock x:Name="TxtStatus" Grid.Column="3" VerticalAlignment="Center"
+                       Foreground="{DynamicResource Fg_808080}" Margin="12,0,0,0"/>
+        </Grid>
+
+        <!-- 预览 / 编辑区 -->
+        <Border Grid.Row="1" Margin="20,0,20,10" CornerRadius="8"
+                Background="#FF1E1E1E" ClipToBounds="True">
+            <Grid x:Name="StageHost">
+                <Grid x:Name="Stage" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Background="Transparent" Cursor="Cross"
+                      MouseLeftButtonDown="Stage_MouseLeftButtonDown"
+                      MouseMove="Stage_MouseMove"
+                      MouseLeftButtonUp="Stage_MouseLeftButtonUp">
+                    <Image x:Name="BaseImage" Stretch="Fill"/>
+                    <MediaElement x:Name="VideoPreview" LoadedBehavior="Manual"
+                                  Stretch="UniformToFill" Visibility="Collapsed"
+                                  MediaEnded="VideoPreview_MediaEnded"/>
+                    <InkCanvas x:Name="InkLayer" IsHitTestVisible="False" Background="Transparent"/>
+                    <Canvas x:Name="TextLayer" Background="Transparent" IsHitTestVisible="True"/>
+                    <Canvas x:Name="SelectionLayer" IsHitTestVisible="False"/>
+                    <TextBlock x:Name="EmptyHint" Text="点击左上角「导入」选择封面图片、GIF 或视频"
+                               Foreground="#99FFFFFF" FontSize="14"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 底部 -->
+        <Grid Grid.Row="2" Margin="20,0,20,16">
+            <TextBlock x:Name="TxtTip" VerticalAlignment="Center"
+                       Foreground="{DynamicResource Fg_808080}"
+                       Text="选中文字工具后在封面范围内拖出文本框；选中画笔/橡皮擦后在封面范围内涂画。"/>
+            <CheckBox x:Name="ChkBlurBackground" Grid.Column="0" Grid.ColumnSpan="2"
+                      VerticalAlignment="Center" Margin="0,0,0,0"
+                      Content="模糊并应用到主界面背景"
+                      ToolTip="开启后将把封面原图模糊后作为主界面背景"
+                      MouseEnter="ChkBlurBackground_MouseEnter"
+                      MouseMove="ChkBlurBackground_MouseMove"
+                      MouseLeave="ChkBlurBackground_MouseLeave"/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Width="90" Height="32" Margin="0,0,10,0" Click="BtnCancel_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE711;" FontFamily="{StaticResource AppIconFont}"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="取消" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button Width="100" Height="32" Click="BtnSave_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE73E;" FontFamily="{StaticResource AppIconFont}"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="保存封面" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

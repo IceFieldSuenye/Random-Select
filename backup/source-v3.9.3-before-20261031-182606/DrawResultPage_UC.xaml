@@ -1,0 +1,68 @@
+<UserControl x:Class="RandomDrawer.DrawResultPage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RandomDrawer">
+
+    <!-- ★ 修复：给根节点加上 x:Name，以便在后台代码中动态设置背景 -->
+    <Grid x:Name="ResultRoot" Background="{DynamicResource Bg_F0F0F0}">
+        <TextBlock x:Name="TxtCountHint"
+                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                   Margin="24,20,0,0"
+                   FontSize="20"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource Fg_333333}"/>
+
+        <ScrollViewer x:Name="ResultScrollViewer" PanningMode="VerticalOnly"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="20,70,20,90">
+            <Grid x:Name="CardsHost"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch">
+                <Grid.RenderTransform>
+                    <ScaleTransform x:Name="CardsScale" ScaleX="1" ScaleY="1"/>
+                </Grid.RenderTransform>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- 贴边滚动条：占满整个右边界高度，无上下箭头 -->
+        <ScrollBar x:Name="PageScrollBar" Panel.ZIndex="30" Orientation="Vertical"
+                   HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                   Margin="0" Visibility="Collapsed"/>
+
+
+        <StackPanel x:Name="ButtonBar" Orientation="Horizontal"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,30,20">
+            <Button Name="BtnContinueDraw" Width="120" Height="36" Margin="0,0,10,0"
+                    Click="BtnContinueDraw_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE72A;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="继续抽取" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Name="BtnOk" Width="100" Height="36" Click="BtnOk_Click" IsDefault="True">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="确定" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- ★ 结果渲染遮罩：大量结果分批生成时保持加载动画 -->
+        <Grid x:Name="RenderLoadingPanel" Panel.ZIndex="80"
+              Background="{DynamicResource Bg_F0F0F0}"
+              Visibility="Collapsed">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Viewbox Width="72" Height="72" HorizontalAlignment="Center">
+                    <local:NowLoadingSpinner x:Name="RenderSpinner" Width="18" Height="18"/>
+                </Viewbox>
+                <TextBlock Text="正在生成抽取结果…" FontSize="15" Margin="0,14,0,0"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource Fg_333333}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

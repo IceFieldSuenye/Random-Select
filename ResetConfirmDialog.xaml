@@ -1,0 +1,129 @@
+<local:FloatingDialogBase x:Class="RandomDrawer.ResetConfirmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RandomDrawer"
+        Title="警告" DialogWidth="440">
+
+    <UserControl.Resources>
+        <!-- ★ 普通按钮样式：与全局风格一致（去圆角、简洁边框） -->
+        <Style x:Key="FlatButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinWidth" Value="90"/>
+            <Setter Property="Background" Value="{DynamicResource Bg_E1E1E1}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Bd_ADADAD}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource Fg_000000}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_D6D6D6}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_C0C0C0}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ★ 危险按钮样式：红色，悬停保持红色，无圆角 -->
+        <Style x:Key="DangerButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinWidth" Value="90"/>
+            <Setter Property="Background" Value="{DynamicResource Bg_D32F2F}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Bd_A91D1D}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource Fg_FFFFFF}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_E53935}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_B71C1C}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- ★ 纵向布局：图标在顶部居中 → 文字 → 按钮，整体在窗口中央 -->
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="28,20,28,28">
+
+        <!-- 1. 警告图标：顶部居中 -->
+        <TextBlock Text="&#xE7BA;"
+                   FontFamily="{StaticResource AppIconFont}"
+                   FontSize="48"
+                   Foreground="{DynamicResource Fg_F57C00}"
+                   HorizontalAlignment="Center"/>
+
+        <!-- 2. 文字：居中 -->
+        <TextBlock FontSize="15"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   LineHeight="24"
+                   Margin="0,15,0,0">
+            <Run Text="这将重置所有设置"/>
+            <LineBreak/>
+            <Run Text="（不删除卡池数据以及资源文件）"/>
+            <LineBreak/>
+            <Run Text="是否继续？"/>
+        </TextBlock>
+
+        <!-- 3. 按钮：居中 -->
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    Margin="0,25,0,0">
+            <Button Style="{StaticResource FlatButtonStyle}"
+                    Margin="0,0,10,0"
+                    Click="Cancel_Click" IsCancel="True">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="取消" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <Button Style="{StaticResource DangerButtonStyle}"
+                    Click="Confirm_Click" IsDefault="True">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE72A;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"
+                               Foreground="{DynamicResource Fg_FFFFFF}"/>
+                    <TextBlock Text="继续" VerticalAlignment="Center" Foreground="{DynamicResource Fg_FFFFFF}"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </StackPanel>
+</local:FloatingDialogBase>

@@ -1,0 +1,34 @@
+<local:FloatingDialogBase x:Class="RandomDrawer.InputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RandomDrawer"
+        Title="输入" DialogWidth="420">
+    <Grid Margin="22,18,22,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Name="TxtMessage" Text="提示内容" FontSize="14" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
+        <TextBox Grid.Row="1" Name="TxtInput" Height="30" VerticalContentAlignment="Center" FontSize="14" Padding="5,0" Margin="0,0,0,20"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <!-- 核心修复：取消按钮移到左边 -->
+            <Button Click="Cancel_Click" IsCancel="True" Width="90" Height="32" Margin="0,0,10,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="取消" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <!-- 核心修复：确定按钮移到右边 -->
+            <Button Click="Ok_Click" IsDefault="True" Width="90" Height="32">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="确定" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Grid>
+</local:FloatingDialogBase>

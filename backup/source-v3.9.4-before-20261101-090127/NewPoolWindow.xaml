@@ -1,0 +1,149 @@
+﻿<Window x:Class="RandomDrawer.NewPoolWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新建卡池" Height="760" Width="720" MinWidth="640" MinHeight="620"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="150"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 行0：卡池名称 + 选择文档 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15" VerticalAlignment="Center">
+            <TextBlock Text="卡池名称：" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+            <TextBox Name="PoolNameBox" Width="260" Height="28" Margin="0,0,10,0"
+                     VerticalContentAlignment="Center" Padding="5,0"/>
+            <Button Width="100" Height="28" Margin="0" Click="SelectFile_Click" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE8E5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="选择文档" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- 行1：保存位置（可编辑 ComboBox + 灰色箭头 + 淡灰背景 + 浏览按钮） -->
+        <Grid Grid.Row="1" Margin="0,0,0,15" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="保存位置：" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+            <ComboBox Name="SaveLocationBox" Grid.Column="1" Width="260"
+                      Style="{StaticResource AppComboBoxStyle}"
+                      IsEditable="True"
+                      ToolTip="卡池文件保存的父目录。可从下拉列表选择已保存的卡池目录，也可手动输入或粘贴路径。点击“浏览”选择时，会自动在该目录下创建 SelectBox 子文件夹。"/>
+            <Button Grid.Column="2" Width="100" Height="28" Margin="10,0,0,0"
+                    HorizontalAlignment="Left" Click="BrowseSaveLocation_Click">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="浏览" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- 行2：卡池封面 -->
+        <Grid Grid.Row="2" Margin="0,0,0,15" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="卡池封面：" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
+            <Button Grid.Column="1" Height="28" Padding="12,0" Click="SelectCover_Click">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xEB9F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="选择封面图片/视频" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <TextBlock Name="TxtCoverPath" Grid.Column="2" VerticalAlignment="Center" Margin="10,0,0,0" 
+                       Foreground="{DynamicResource Fg_808080}" Text="未选择文件" TextTrimming="CharacterEllipsis"/>
+        </Grid>
+
+        <!-- 行3：提示 + 概率勾选 + 高级按钮 + 策略提示 -->
+        <Grid Grid.Row="3" Margin="0,0,0,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="在下方输入文本，第一行作为表头（用空格分隔列），每一行数据作为一个抽取对象。" 
+                       TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <CheckBox Name="ChkProbability" Content="基于不同概率的抽取" VerticalAlignment="Center" Margin="0,0,15,0" 
+                          Checked="ChkProbability_Checked" Unchecked="ChkProbability_Unchecked"/>
+                <Button Name="BtnAdvanced" Height="28" Padding="12,0" Visibility="Collapsed" Click="BtnAdvanced_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE90F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="高级" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <TextBlock Name="TxtActiveStrategy" VerticalAlignment="Center" Margin="12,0,0,0" 
+                           Foreground="{DynamicResource Fg_0078D7}" FontWeight="Bold" Visibility="Collapsed"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 行4：文本输入区 -->
+        <TextBox Name="InputBox" Grid.Row="4" AcceptsReturn="True" TextWrapping="Wrap" 
+                 VerticalScrollBarVisibility="Auto" TextChanged="InputBox_TextChanged" 
+                 Padding="5,3" FontSize="14" VerticalContentAlignment="Top"
+                 BorderBrush="{DynamicResource Bd_ABADB3}" BorderThickness="1"/>
+
+        <!-- 行5：预览标签 -->
+        <TextBlock Text="预览 (双击可编辑)" Grid.Row="5" FontWeight="Bold" Margin="0,10,0,5" VerticalAlignment="Center"/>
+
+        <!-- 行6：预览表格（★ 应用统一的灰色框线样式） -->
+        <DataGrid Name="PreviewGrid" Grid.Row="6"
+                  Style="{StaticResource AppDataGridStyle}"
+                  AutoGenerateColumns="True" IsReadOnly="False"
+                  CanUserAddRows="False" HeadersVisibility="Column"
+                  CellEditEnding="PreviewGrid_CellEditEnding"
+                  MinHeight="100">
+        </DataGrid>
+
+        <!-- 行7：底部操作区 -->
+        <Grid Grid.Row="7" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <CheckBox Name="ChkLock" VerticalAlignment="Center" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE72E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="锁定此卡池" VerticalAlignment="Center"/>
+                </StackPanel>
+            </CheckBox>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Width="90" Height="32" Margin="0,0,10,0" Click="Cancel_Click" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="取消" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Width="90" Height="32" Click="Create_Click" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="创建" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

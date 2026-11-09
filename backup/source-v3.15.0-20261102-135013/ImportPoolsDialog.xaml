@@ -1,0 +1,100 @@
+<local:FloatingDialogBase x:Class="RandomDrawer.ImportPoolsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RandomDrawer"
+        Title="导入卡池" DialogWidth="580">
+    <Grid Margin="22,14,22,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 导入到（下拉 + 可编辑文本框 + 浏览） -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="导入到：" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <ComboBox Grid.Column="1" Name="TargetDirBox" Height="30"
+                      Style="{StaticResource AppComboBoxStyle}"
+                      IsEditable="True"
+                      ToolTip="卡池导入到的父目录。可从下拉列表选择已保存的卡池目录，也可手动输入或粘贴路径。"/>
+            <Button Grid.Column="2" Width="80" Height="30" Margin="10,0,0,0" Click="BrowseTargetDir_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="13"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="浏览" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- 拖放区 -->
+        <Border Grid.Row="1" Name="DropArea" Height="96" CornerRadius="8"
+                BorderBrush="{DynamicResource Bd_CCCCCC}" BorderThickness="1"
+                Background="{DynamicResource Bg_F9FAFB}"
+                AllowDrop="True"
+                DragEnter="DropArea_DragEnter" DragOver="DropArea_DragOver"
+                DragLeave="DropArea_DragLeave" Drop="DropArea_Drop">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="28"
+                           Foreground="{DynamicResource Fg_9A9A9A}" HorizontalAlignment="Center"/>
+                <TextBlock Text="拖动卡池压缩包至此添加" FontSize="14"
+                           Foreground="{DynamicResource Fg_666666}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 列表标题 -->
+        <Grid Grid.Row="2" Margin="0,12,0,6">
+            <TextBlock Name="TxtListTitle" Text="待导入的卡池：" FontSize="13"
+                       Foreground="{DynamicResource Fg_666666}" VerticalAlignment="Center"/>
+            <Button Width="104" Height="28" HorizontalAlignment="Right" Click="PickFiles_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource AppIconFont}" FontSize="13"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="选择文件" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- 卡池列表 -->
+        <Border Grid.Row="3" BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1" CornerRadius="6"
+                Background="{DynamicResource Bg_FFFFFF}" Padding="12,6" MinHeight="90" MaxHeight="200">
+            <ScrollViewer PanningMode="Both" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                <StackPanel Name="ItemHost"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- 进度 -->
+        <StackPanel Grid.Row="4" Margin="0,12,0,0">
+            <ProgressBar Name="Progress" Height="6" Minimum="0" Maximum="100" Value="0"
+                         Visibility="Collapsed"/>
+            <TextBlock Name="TxtStatus" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                       Foreground="{DynamicResource Fg_888888}" Visibility="Collapsed"/>
+        </StackPanel>
+
+        <!-- 按钮 -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Name="BtnCancel" Width="92" Height="32" Margin="0,0,10,0" Click="Cancel_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource AppIconFont}" FontSize="12"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="取消" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Name="BtnImport" Width="92" Height="32" IsDefault="True" Click="Import_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="13"
+                               VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="导入" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Grid>
+</local:FloatingDialogBase>

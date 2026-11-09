@@ -1,0 +1,33 @@
+# ---- 构建产物 ----
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# ---- 内部开发资料（不公开）----
+Readme/*
+!Readme/更新日志.txt
+Test/
+Pre-Delete/
+
+# ---- Release 目录：只保留指定的 3.75.2 发布包 ----
+Release/*
+!Release/Random-Select-3.75.2.exe
+
+# ---- 历史备份中的构建产物与本机配置 ----
+backup/**/bin/
+backup/**/obj/
+backup/**/logs/
+backup/**/*.user
+backup/**/*.exe
+backup/**/*.zip
+
+# ---- 历史备份中的内部开发资料（更新日志保留，编译需要）----
+backup/**/Readme/*
+!backup/**/Readme/更新日志.txt
+backup/**/Readme.md
+backup/**/structure.md
+backup/**/thinking.md
+backup/**/Release/Readme.md
+backup/**/Release/structure.md

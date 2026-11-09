@@ -1,0 +1,421 @@
+<UserControl x:Class="RandomDrawer.AdvancedGachaPage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Storyboard x:Key="SyncRingStoryboard" RepeatBehavior="Forever">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E1" Storyboard.TargetProperty="Opacity">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT1" Storyboard.TargetProperty="Angle">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E2" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.167">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT2" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.167">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E3" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.334">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT3" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.334">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E4" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.501">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT4" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.501">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E5" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.668">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT5" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.668">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="E6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.835">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.21" Value="1"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.22" Value="0"/>
+                <DiscreteDoubleKeyFrame KeyTime="0:0:3.47" Value="0"/>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="RT6" Storyboard.TargetProperty="Angle" BeginTime="0:0:0.835">
+                <SplineDoubleKeyFrame KeyTime="0:0:0" Value="-110" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:0.433" Value="10" KeySpline="0.02,0.33,0.38,0.77"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.2" Value="93"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:1.617" Value="205" KeySpline="0.57,0.17,0.95,0.75"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.017" Value="357" KeySpline="0,0.19,0.07,0.72"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:2.783" Value="439"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.217" Value="585" KeySpline="0,0,0.95,0.37"/>
+                <SplineDoubleKeyFrame KeyTime="0:0:3.47" Value="720"/>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+    </UserControl.Resources>
+
+    <Grid Margin="20" MaxWidth="1180" Background="{DynamicResource Bg_FFFFFF}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="抽卡规则预设" FontSize="22" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <CheckBox Name="ChkEnable" Grid.Row="0" Grid.Column="0"
+                      Content="启用高级抽卡规则：" VerticalAlignment="Center" VerticalContentAlignment="Center" 
+                      Margin="0,0,15,0" FontSize="14" FontWeight="Bold" Click="ChkEnable_Click">
+                <CheckBox.Style>
+                    <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+                        <Setter Property="Foreground" Value="{DynamicResource Fg_333333}"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource Fg_808080}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </CheckBox.Style>
+            </CheckBox>
+
+            <ComboBox Name="ComboPreset" Grid.Row="0" Grid.Column="1" Height="32"
+                      Style="{StaticResource AppComboBoxStyle}"
+                      VerticalContentAlignment="Center"
+                      IsEnabled="False" SelectionChanged="ComboPreset_SelectionChanged">
+                <ComboBoxItem Content="崩坏：星穹铁道"/>
+                <ComboBoxItem Content="蔚蓝档案（旧）"/>
+                <ComboBoxItem Content="蔚蓝档案（新）"/>
+            </ComboBox>
+
+            <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" 
+                        Name="WarpTypePanel" Orientation="Horizontal" 
+                        Margin="0,20,0,0" Visibility="Collapsed">
+                <TextBlock Text="跃迁类型：" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                <ComboBox Name="ComboWarpType" Width="250" Height="32"
+                          Style="{StaticResource AppComboBoxStyle}"
+                          VerticalContentAlignment="Center" 
+                          SelectionChanged="ComboWarpType_SelectionChanged">
+                    <ComboBoxItem Content="角色活动跃迁"/>
+                    <ComboBoxItem Content="光锥活动跃迁"/>
+                    <ComboBoxItem Content="群星跃迁"/>
+                </ComboBox>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Grid.Row="2" Name="TxtHint" Foreground="{DynamicResource Fg_808080}" Margin="0,0,0,15">
+            <Run Text="&#xE783;" FontFamily="{StaticResource AppIconFont}" FontSize="14" Foreground="{DynamicResource Fg_666666}" BaselineAlignment="Center"/>
+            <Run Text=" 必须创建“分类”列才能使用。"/>
+        </TextBlock>
+
+        <ScrollViewer PanningMode="VerticalOnly" Grid.Row="3" VerticalScrollBarVisibility="Auto">
+            <Grid>
+                <StackPanel Name="DevelopingPanel" Orientation="Vertical" 
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                    <Viewbox Width="80" Height="80" HorizontalAlignment="Center" Margin="0,0,0,20">
+                        <Grid Width="100" Height="100">
+                            <Canvas x:Name="C1" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT1"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E1" Width="8" Height="8" Fill="{DynamicResource Fl_000000}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C2" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT2"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E2" Width="8" Height="8" Fill="{DynamicResource Fl_000000}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C3" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT3"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E3" Width="8" Height="8" Fill="{DynamicResource Fl_000000}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C4" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT4"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E4" Width="8" Height="8" Fill="{DynamicResource Fl_000000}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C5" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT5"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E5" Width="8" Height="8" Fill="{DynamicResource Fl_000000}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                            <Canvas x:Name="C6" Width="100" Height="100" RenderTransformOrigin="0.5,0.5">
+                                <Canvas.RenderTransform>
+                                    <RotateTransform x:Name="RT6"/>
+                                </Canvas.RenderTransform>
+                                <Ellipse x:Name="E6" Width="8" Height="8" Fill="{DynamicResource Fl_000000}" Opacity="0" Canvas.Left="46" Canvas.Top="3"/>
+                            </Canvas>
+                        </Grid>
+                    </Viewbox>
+                    <TextBlock Text=" 正在开发中。" FontSize="18" Foreground="{DynamicResource Fg_808080}" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- HSR 面板 -->
+                <Grid Name="SettingsPanel" Visibility="Collapsed" Margin="0,5,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="40"/>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="5星角色分类：" VerticalAlignment="Center" Margin="0,10,10,10"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" Name="ComboFiveStar" Height="28"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              VerticalContentAlignment="Center" Margin="0,10,0,10"
+                              SelectionChanged="ComboFiveStar_SelectionChanged"/>
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="UP5星角色：" VerticalAlignment="Center" Margin="0,10,10,10"/>
+                    <ComboBox Grid.Row="0" Grid.Column="4" Name="ComboFiveStarUp" Height="28"
+                              Style="{StaticResource PlainSelectButtonStyle}"
+                              VerticalContentAlignment="Center" Margin="0,10,0,10" IsEnabled="False"
+                              ToolTip="点击打开搜索选择"
+                              PreviewMouseLeftButtonDown="ComboFiveStarUp_PreviewMouseLeftButtonDown"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="4星角色分类：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <ComboBox Grid.Row="1" Grid.Column="1" Name="ComboFourStar" Height="28"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              VerticalContentAlignment="Center" Margin="0,0,0,10"
+                              SelectionChanged="ComboFourStar_SelectionChanged"/>
+                    <TextBlock Grid.Row="1" Grid.Column="3" Text="UP4星角色：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <Button Grid.Row="1" Grid.Column="4" Name="BtnFourStarUp" Height="28" Margin="0,0,0,10"
+                            Style="{StaticResource ModernSelectButtonStyle}" Click="BtnFourStarUp_Click">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock x:Name="IconFourStarUp" Text="&#xE8B0;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Name="TxtFourStarUpDisplay" Text="点击选择" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Button>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="5星非UP基础概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="2" Grid.Column="1" Name="TxtFiveStarNonUpProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtHSRProb_TextChanged"/>
+                    <TextBlock Grid.Row="2" Grid.Column="3" Text="5星UP基础概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="2" Grid.Column="4" Name="TxtFiveStarUpProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtHSRProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="4星UP基础概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="3" Grid.Column="1" Name="TxtFourStarUpProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtHSRProb_TextChanged"/>
+                    <TextBlock Grid.Row="3" Grid.Column="3" Text="4星非UP基础概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="3" Grid.Column="4" Name="TxtFourStarNonUpProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtHSRProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="3星物品概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Name="TxtThreeStarProb" Text="-" VerticalAlignment="Center" Margin="0,0,0,10" FontSize="14" Foreground="{DynamicResource Fg_000000}" FontWeight="Normal"/>
+                    <TextBlock Grid.Row="4" Grid.Column="3" Grid.ColumnSpan="2" Foreground="{DynamicResource Fg_808080}" VerticalAlignment="Center" Margin="0,0,0,10" TextWrapping="Wrap">
+                        <Run Text="&#xE783;" FontFamily="{StaticResource AppIconFont}" FontSize="14" Foreground="{DynamicResource Fg_666666}" BaselineAlignment="Center"/>
+                        <Run Text=" 3星物品概率 = 100% - 其他四项之和（自动计算）。"/>
+                    </TextBlock>
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="概率提升起始抽数：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="5" Grid.Column="1" Name="TxtSoftPityStart" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0"/>
+                    <TextBlock Grid.Row="5" Grid.Column="3" Text="概率提升值：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="5" Grid.Column="4" Name="TxtSoftPityIncrease" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0"/>
+
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="4星保底抽数：" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Row="6" Grid.Column="1" Name="TxtFourStarPity" Height="28" VerticalContentAlignment="Center" Padding="5,0"/>
+                    <TextBlock Grid.Row="6" Grid.Column="3" Text="5星保底抽数：" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Row="6" Grid.Column="4" Name="TxtFiveStarPity" Height="28" VerticalContentAlignment="Center" Padding="5,0"/>
+
+                    <CheckBox Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="5" Name="ChkHighlightColors"
+                              Content="更醒目的颜色（5星金色 / 4星紫色）"
+                              FontSize="13" Margin="0,12,0,0" VerticalAlignment="Center"
+                              Checked="ChkHighlightColors_Changed" Unchecked="ChkHighlightColors_Changed"/>
+                </Grid>
+
+                <!-- 蔚蓝档案（旧）面板 -->
+                <Grid Name="SettingsPanelBA" Visibility="Collapsed" Margin="0,5,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="30"/>
+                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="选择卡池类型：" VerticalAlignment="Center" Margin="0,10,10,10"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="4" Name="ComboBAPoolType" Height="28"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              VerticalContentAlignment="Center" Margin="0,10,0,10"
+                              SelectionChanged="ComboBAPoolType_SelectionChanged">
+                        <ComboBoxItem Content="常驻招募"/>
+                        <ComboBoxItem Content="限时招募"/>
+                        <ComboBoxItem Content="庆典招募"/>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="3星学生：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <ComboBox Grid.Row="1" Grid.Column="1" Name="ComboBAThreeStar" Height="28"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              VerticalContentAlignment="Center" Margin="0,0,0,10"
+                              SelectionChanged="ComboBAThreeStar_SelectionChanged"/>
+                    <TextBlock Grid.Row="1" Grid.Column="3" Text="3星学生总概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="1" Grid.Column="4" Name="TxtBAThreeStarProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtBAProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="2星学生：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" Name="ComboBATwoStar" Height="28"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              VerticalContentAlignment="Center" Margin="0,0,0,10"
+                              SelectionChanged="ComboBATwoStar_SelectionChanged"/>
+                    <TextBlock Grid.Row="2" Grid.Column="3" Text="2星学生总概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="2" Grid.Column="4" Name="TxtBATwoStarProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtBAProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="3" Text="1星学生总概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBlock Grid.Row="3" Grid.Column="4" Name="TxtBAOneStarProb" Text="-" VerticalAlignment="Center" Margin="0,0,0,10" FontSize="14" Foreground="{DynamicResource Fg_000000}" FontWeight="Normal"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Name="LblBAUp3Star" Text="UP3星学生：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <ComboBox Grid.Row="4" Grid.Column="1" Name="ComboBAUp3Star" Height="28"
+                              Style="{StaticResource PlainSelectButtonStyle}"
+                              VerticalContentAlignment="Center" Margin="0,0,0,10"
+                              ToolTip="点击打开搜索选择"
+                              PreviewMouseLeftButtonDown="ComboBAUp3Star_PreviewMouseLeftButtonDown"/>
+                    <Button Grid.Row="4" Grid.Column="1" Name="BtnBACelebrationUp3" Height="28" Margin="0,0,0,10"
+                            Style="{StaticResource ModernSelectButtonStyle}" Visibility="Collapsed" Click="BtnBACelebrationUp3_Click">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock x:Name="IconBACelebrationUp3" Text="&#xE8B0;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Name="TxtBACelebrationUp3Display" Text="点击选择" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Grid.Row="4" Grid.Column="3" Name="LblBAUp3Prob" Text="UP3星角色概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="4" Grid.Column="4" Name="TxtBAUp3StarProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtBAProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="5" Grid.Column="3" Name="LblBASubUp3Prob" Text="次UP3星角色概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="5" Grid.Column="4" Name="TxtBASubUp3StarProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtBAProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="6" Grid.Column="0" Name="LblBAUp2Star" Text="(可选)UP2星学生：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <ComboBox Grid.Row="6" Grid.Column="1" Name="ComboBAUp2Star" Height="28"
+                              Style="{StaticResource PlainSelectButtonStyle}"
+                              VerticalContentAlignment="Center" Margin="0,0,0,10"
+                              ToolTip="点击打开搜索选择"
+                              SelectionChanged="ComboBAUp2Star_SelectionChanged"
+                              PreviewMouseLeftButtonDown="ComboBAUp2Star_PreviewMouseLeftButtonDown"/>
+                    <TextBlock Grid.Row="6" Grid.Column="3" Name="LblBAUp2Prob" Text="UP2星角色概率：" VerticalAlignment="Center" Margin="0,0,10,10"/>
+                    <TextBox Grid.Row="6" Grid.Column="4" Name="TxtBAUp2StarProb" Height="28" VerticalContentAlignment="Center" Margin="0,0,0,10" Padding="5,0" TextChanged="TxtBAProb_TextChanged"/>
+
+                    <TextBlock Grid.Row="7" Grid.Column="0" Text="2星保底抽数：" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Row="7" Grid.Column="1" Name="TxtBA2StarPity" Height="28" VerticalContentAlignment="Center" Padding="5,0" TextChanged="TxtBA2StarPity_TextChanged"/>
+                    <TextBlock Grid.Row="7" Grid.Column="3" Grid.ColumnSpan="2" Name="TxtPityHint"
+                               Foreground="{DynamicResource Fg_808080}" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Visibility="Collapsed">
+                        <Run Text="&#xE783;" FontFamily="{StaticResource AppIconFont}" FontSize="14" Foreground="{DynamicResource Fg_666666}" BaselineAlignment="Center"/>
+                        <Run Text=" 每 "/>
+                        <Run Name="RunPityN" Text="N" FontWeight="Bold" Foreground="{DynamicResource Fg_333333}"/>
+                        <Run Text=" 次抽取必得 2星或以上学生。"/>
+                    </TextBlock>
+
+                    <CheckBox Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="5" Name="ChkHighlightColorsBA"
+                              Content="更醒目的颜色（3星粉色 / 2星金色 / 1星蓝色）"
+                              FontSize="13" Margin="0,12,0,0" VerticalAlignment="Center"
+                              Checked="ChkHighlightColors_Changed" Unchecked="ChkHighlightColors_Changed"/>
+                </Grid>
+            </Grid>
+        </ScrollViewer>
+
+        <TextBlock Grid.Row="4" Name="TxtFooterHint" Foreground="{DynamicResource Fg_808080}" FontSize="12" HorizontalAlignment="Right" Margin="0,10,10,0" Visibility="Collapsed">
+            <Run Text="&#xE783;" FontFamily="{StaticResource AppIconFont}" FontSize="14" Foreground="{DynamicResource Fg_666666}" BaselineAlignment="Center"/>
+            <Run Text=" 点击确定将覆盖已设置的概率。"/>
+        </TextBlock>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Name="BtnDefault" Width="120" Height="35" Margin="0,0,10,0" Click="BtnDefault_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE70F;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="填入默认值" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Width="100" Height="35" Margin="0,0,10,0" Click="BtnCancel_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="取消" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Width="100" Height="35" Click="BtnOk_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE73E;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="确定" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Grid>
+</UserControl>

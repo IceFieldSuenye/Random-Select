@@ -1,0 +1,600 @@
+<UserControl x:Class="RandomDrawer.CoverEditorPage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RandomDrawer"
+             PreviewKeyDown="CoverEditor_PreviewKeyDown">
+
+    <UserControl.Resources>
+        <!-- PS 风格的透明区棋盘格 -->
+        <DrawingBrush x:Key="CheckerBrush" TileMode="Tile" Stretch="None"
+                      Viewport="0,0,16,16" ViewportUnits="Absolute"
+                      Viewbox="0,0,16,16" ViewboxUnits="Absolute">
+            <DrawingBrush.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="#FFBFBFBF">
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,16,16"/>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#FFFFFFFF">
+                        <GeometryDrawing.Geometry>
+                            <GeometryGroup>
+                                <RectangleGeometry Rect="0,0,8,8"/>
+                                <RectangleGeometry Rect="8,8,8,8"/>
+                            </GeometryGroup>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                </DrawingGroup>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+
+        <!-- 功能区之间的竖向分隔线 -->
+        <Style x:Key="ToolGroupSeparator" TargetType="Border">
+            <Setter Property="BorderThickness" Value="1,0,0,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Bd_E5E7EB}"/>
+            <Setter Property="Margin" Value="12,0,0,0"/>
+            <Setter Property="Padding" Value="12,0,0,0"/>
+        </Style>
+
+        <!-- 3.35：顶栏与功能区通用的小圆角按钮（透明底，悬浮 / 选中才有底色）。
+             选中态由 SetToggle 写 Background / BorderBrush，模板直接跟随，避免各按钮各写一套。 -->
+        <Style x:Key="FlatToolButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource Fg_333333}"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="Bd" CornerRadius="6"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"/>
+                            <!-- 悬浮底色画在文字下面，避免半透明层盖住内容（深色主题下尤其明显） -->
+                            <Border x:Name="HoverLayer" CornerRadius="6" Margin="1"
+                                    Background="{DynamicResource Ui.HoverSoft}"
+                                    Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="PressLayer" CornerRadius="6" Margin="1"
+                                    Background="{DynamicResource Ui.ButtonPressed}"
+                                    Opacity="0" IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverLayer" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="PressLayer" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 3.38：页签 —— 悬浮时文字下方出现灰色短线，选中时是蓝色横线（共享 TabIndicator 平滑滑动） -->
+        <Style x:Key="RibbonTabButton" TargetType="RadioButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Foreground" Value="{DynamicResource Fg_333333}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                            <!-- 悬浮短线（选中时被蓝色指示条盖住） -->
+                            <Border x:Name="HoverLine" Width="16" Height="2" CornerRadius="1"
+                                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                    Margin="0,0,0,3" Background="{DynamicResource Fg_808080}"
+                                    Opacity="0" IsHitTestVisible="False"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverLine" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="HoverLine" Property="Opacity" Value="0"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 3.35：缩放条（音量条外观：细轨道 + 圆形滑块；填充部分用灰色，不是蓝色） -->
+        <Style x:Key="VolumeSliderStyle" TargetType="Slider">
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Background="Transparent" VerticalAlignment="Center">
+                            <Border Height="4" CornerRadius="2"
+                                    Background="{DynamicResource Bd_E5E7EB}"
+                                    VerticalAlignment="Center"/>
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="4" CornerRadius="2,0,0,2"
+                                                        Background="{DynamicResource Fg_808080}"
+                                                        VerticalAlignment="Center"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="4" Background="Transparent"
+                                                        VerticalAlignment="Center"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="14" Height="14" Focusable="False">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Background="Transparent">
+                                                    <Ellipse Fill="{DynamicResource Ui.SliderThumb}"
+                                                             Stroke="{DynamicResource Fg_808080}"
+                                                             StrokeThickness="1.5"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="Root" Background="{DynamicResource Bg_FFFFFF}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 3.35：功能区重构为 WPS 风格
+             第一行：左侧小图标（替换封面 / 保存 / 撤销 / 恢复）+ 右侧页签（文字 / 绘图 / 样式）；
+             第二行：当前页签的功能区。取消按钮移除，保存移到左上角。 -->
+        <Grid x:Name="RibbonArea" Grid.Row="0" Margin="20,12,20,8">
+            <Border Background="{DynamicResource Ui.CardBg}"
+                    BorderBrush="{DynamicResource Ui.CardBorder}"
+                    BorderThickness="1" CornerRadius="10"
+                    Padding="10,4,10,6">
+                <StackPanel>
+                    <!-- 第一行：左侧小图标 + 右侧页签 -->
+                    <Grid Height="34">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="BtnImport" Style="{StaticResource FlatToolButton}"
+                                    Padding="8,0" Click="BtnImport_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource AppIconFont}"
+                                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock x:Name="TxtImportText" Text="替换封面" FontSize="13"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="BtnSave" Style="{StaticResource FlatToolButton}"
+                                    Padding="8,0" Margin="4,0,0,0" Click="BtnSave_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE74E;" FontFamily="{StaticResource AppIconFont}"
+                                               FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="保存" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Border Width="1" Height="16" Margin="8,0"
+                                    Background="{DynamicResource Bd_E5E7EB}"/>
+
+                            <Button x:Name="BtnUndo" Style="{StaticResource FlatToolButton}"
+                                    Width="30" Click="BtnUndo_Click">
+                                <TextBlock Text="&#xE7A7;" FontFamily="{StaticResource AppIconFont}"
+                                           FontSize="14" VerticalAlignment="Center"/>
+                            </Button>
+                            <Button x:Name="BtnRedo" Style="{StaticResource FlatToolButton}"
+                                    Width="30" Margin="4,0,0,0" Click="BtnRedo_Click">
+                                <TextBlock Text="&#xE7A6;" FontFamily="{StaticResource AppIconFont}"
+                                           FontSize="14" VerticalAlignment="Center"/>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- 3.36：页签在功能区里水平居中（左侧的替换封面 / 保存 / 撤销 / 恢复保持靠左）
+                             3.37：指示条与页签分开，由代码算位置后平滑滑动 -->
+                        <Grid x:Name="TabStrip" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Height="32">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"
+                                        x:Name="TabItems">
+                                <RadioButton x:Name="TabText" Content="文字" GroupName="RibbonTabs"
+                                             Style="{StaticResource RibbonTabButton}"
+                                             Checked="RibbonTab_Checked"/>
+                                <RadioButton x:Name="TabDraw" Content="绘图" GroupName="RibbonTabs"
+                                             Style="{StaticResource RibbonTabButton}"
+                                             Checked="RibbonTab_Checked"/>
+                                <RadioButton x:Name="TabStyle" Content="样式" GroupName="RibbonTabs"
+                                             Style="{StaticResource RibbonTabButton}"
+                                             Checked="RibbonTab_Checked"/>
+                            </StackPanel>
+
+                            <Border x:Name="TabIndicator" Width="0" Height="2" CornerRadius="1"
+                                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                    Margin="0,0,0,3" IsHitTestVisible="False"
+                                    Background="{DynamicResource Fg_0078D7}"/>
+                        </Grid>
+                    </Grid>
+
+                    <Border Height="1" Background="{DynamicResource Bd_E5E7EB}" Margin="0,2,0,4"/>
+
+                    <!-- 3.36：第二行整体水平居中。工具按钮按页签显示：
+                         文字页签 → 文本框 / 荧光笔；绘图页签 → 画笔 / 荧光笔 / 橡皮擦 / 取色器；
+                         样式页签没有工具，整组收起。 -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <StackPanel x:Name="ToolGroupRoot" Orientation="Horizontal">
+                            <StackPanel Orientation="Vertical">
+                                <StackPanel Orientation="Horizontal" Height="32">
+                                    <!-- 3.42：选择工具（框选批注后复制 / 删除 / 拖动移动），位于工具组最左侧 -->
+                                    <Button x:Name="BtnSelectTool" Style="{StaticResource FlatToolButton}"
+                                            Width="32" Click="BtnSelectTool_Click">
+                                        <TextBlock Text="&#xE8B0;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="14" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <Button x:Name="BtnTextTool" Style="{StaticResource FlatToolButton}"
+                                            Width="32" Margin="4,0,0,0" Click="BtnTextTool_Click">
+                                        <TextBlock Text="&#xE933;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="14" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <Button x:Name="BtnPen" Style="{StaticResource FlatToolButton}"
+                                            Width="32" Margin="4,0,0,0" Click="BtnPen_Click">
+                                        <TextBlock Text="&#xE76D;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="14" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <Button x:Name="BtnHighlight" Style="{StaticResource FlatToolButton}"
+                                            Width="32" Margin="4,0,0,0" Click="BtnHighlight_Click">
+                                        <TextBlock Text="&#xE7E6;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="14" VerticalAlignment="Center" x:Name="HighlightSwatch"/>
+                                    </Button>
+                                    <!-- 3.39：文字页签的荧光笔样式下拉（高亮 / 下划线 × 多种颜色）
+                                         3.40.1：鼠标停在箭头上时左侧荧光笔图标一起变深色 -->
+                                    <Button x:Name="BtnHighlightMenu" Style="{StaticResource FlatToolButton}"
+                                            Width="16" Click="BtnHighlightMenu_Click"
+                                            MouseEnter="BtnHighlightMenu_MouseEnter"
+                                            MouseLeave="BtnHighlightMenu_MouseLeave"
+                                            Visibility="Collapsed">
+                                        <TextBlock Text="&#xE70D;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="9" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <Button x:Name="BtnEraser" Style="{StaticResource FlatToolButton}"
+                                            Width="32" Margin="4,0,0,0" Click="BtnEraser_Click">
+                                        <TextBlock Text="&#xE75C;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="14" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <!-- 3.37：取色器图标改用 Segoe 图标字体（\uEF3C），不再手画路径 -->
+                                    <Button x:Name="BtnEyedropper" Style="{StaticResource FlatToolButton}"
+                                            Width="32" Margin="4,0,0,0" Click="BtnEyedropper_Click"
+                                            Visibility="Collapsed">
+                                        <TextBlock Text="&#xEF3C;" FontFamily="{StaticResource AppIconFont}"
+                                                   FontSize="15" VerticalAlignment="Center"/>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Border Style="{StaticResource ToolGroupSeparator}"/>
+                        </StackPanel>
+
+                        <Grid VerticalAlignment="Center">
+                            <!-- ① 文字页签：字体 / 字号 / 颜色 / 粗斜体 -->
+                            <WrapPanel x:Name="PanelTextTools" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Height="32">
+                                        <!-- 3.35：字体选择；3.40 显示系统中文名，下拉里每项用该字体本身显示（符号字体回退界面字体） -->
+                                        <ComboBox x:Name="ComboFontFamily" Width="176" Height="26"
+                                                  VerticalAlignment="Center"
+                                                  Style="{StaticResource AppComboBoxStyle}"
+                                                  MaxDropDownHeight="360"
+                                                  TextSearch.TextPath="Name"
+                                                  SelectionChanged="ComboFontFamily_SelectionChanged">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontFamily="{Binding DisplayFamily}"
+                                                               FontSize="13"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <ComboBox x:Name="ComboFontSize" Width="76" Height="26" Margin="4,0,0,0"
+                                                  VerticalAlignment="Center"
+                                                  IsEditable="True" IsTextSearchEnabled="False"
+                                                  Style="{StaticResource AppComboBoxStyle}"
+                                                  MaxDropDownHeight="220"
+                                                  SelectionChanged="ComboFontSize_SelectionChanged"
+                                                  LostKeyboardFocus="ComboFontSize_LostFocus"
+                                                  KeyDown="ComboFontSize_KeyDown"/>
+                                        <Button x:Name="BtnTextColor" Style="{StaticResource FlatToolButton}"
+                                                Width="30" Margin="4,0,0,0" Click="BtnTextColor_Click">
+                                            <Border Width="16" Height="16" CornerRadius="3"
+                                                    Background="{DynamicResource Fg_333333}"
+                                                    BorderBrush="{DynamicResource Bd_CCCCCC}" BorderThickness="1"
+                                                    x:Name="TextColorSwatch" HorizontalAlignment="Center"/>
+                                        </Button>
+                                        <Button x:Name="BtnBold" Style="{StaticResource FlatToolButton}"
+                                                Width="30" Margin="4,0,0,0"
+                                                Content="B" FontWeight="Bold" Click="BtnBold_Click"/>
+                                        <Button x:Name="BtnItalic" Style="{StaticResource FlatToolButton}"
+                                                Width="30" Margin="4,0,0,0"
+                                                Content="I" FontStyle="Italic" Click="BtnItalic_Click"/>
+                                        <Button x:Name="BtnUnderline" Style="{StaticResource FlatToolButton}"
+                                                Width="30" Margin="4,0,0,0" Click="BtnUnderline_Click">
+                                            <TextBlock Text="U" TextDecorations="Underline" VerticalAlignment="Center"/>
+                                        </Button>
+                                        <Button x:Name="BtnStrike" Style="{StaticResource FlatToolButton}"
+                                                Width="30" Margin="4,0,0,0" Click="BtnStrike_Click">
+                                            <TextBlock Text="S" TextDecorations="Strikethrough" VerticalAlignment="Center"/>
+                                        </Button>
+                                    </StackPanel>
+                            </WrapPanel>
+
+                            <!-- ② 绘图页签：画笔 / 荧光笔 / 橡皮擦的颜色与粗细（工具在左侧常驻区） -->
+                            <WrapPanel x:Name="PanelDrawTools" Orientation="Horizontal" VerticalAlignment="Center"
+                                       Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Height="32">
+                                        <!-- 当前绘图工具的颜色：画笔 / 荧光笔各自记忆 -->
+                                        <Button x:Name="BtnPaintColor" Style="{StaticResource FlatToolButton}"
+                                                Width="30" Click="BtnPaintColor_Click">
+                                            <Border Width="16" Height="16" CornerRadius="3" Background="#FFE53935"
+                                                    BorderBrush="{DynamicResource Bd_CCCCCC}" BorderThickness="1"
+                                                    x:Name="PaintColorSwatch" HorizontalAlignment="Center"/>
+                                        </Button>
+                                        <!-- 粗细：多条粗细不同的水平直线（不显示文字），收起时由 PenSizePreview 画当前粗细 -->
+                                        <Grid Width="88" Height="26" Margin="4,0,0,0" VerticalAlignment="Center">
+                                            <ComboBox x:Name="ComboPenSize" Width="88" Height="26"
+                                                      Style="{StaticResource AppComboBoxStyle}"
+                                                      MaxDropDownHeight="440"
+                                                      SelectionChanged="ComboPenSize_SelectionChanged">
+                                                <local:PenWidthItem Thickness="2"/>
+                                                <local:PenWidthItem Thickness="4"/>
+                                                <local:PenWidthItem Thickness="6"/>
+                                                <local:PenWidthItem Thickness="8"/>
+                                                <local:PenWidthItem Thickness="12"/>
+                                                <local:PenWidthItem Thickness="16"/>
+                                                <local:PenWidthItem Thickness="20"/>
+                                                <local:PenWidthItem Thickness="24"/>
+                                            </ComboBox>
+
+                                            <!-- 收起状态：ComboBox 自己的模板会把选中项当文字画出来，
+                                                 这一层同色遮罩把文字盖掉，只留下由 PenSizePreview 画的粗细线。 -->
+                                            <Border x:Name="PenSizeMask" Width="66" Height="24" Margin="1,0,0,0"
+                                                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                    CornerRadius="4" IsHitTestVisible="False" Panel.ZIndex="4">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="{DynamicResource Bg_F3F4F6}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsMouseOver, ElementName=ComboPenSize}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+
+                                            <Rectangle x:Name="PenSizePreview" Width="54" Height="6"
+                                                       RadiusX="3" RadiusY="3"
+                                                       HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                       Margin="8,0,0,0" IsHitTestVisible="False"
+                                                       Panel.ZIndex="5" Fill="{DynamicResource Fg_333333}"/>
+                                        </Grid>
+                                    </StackPanel>
+                            </WrapPanel>
+
+                            <!-- ③ 样式页签：圆角 / 方角（默认方角） -->
+                            <WrapPanel x:Name="PanelStyleTools" Orientation="Horizontal" VerticalAlignment="Center"
+                                       Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Height="32">
+                                        <Button x:Name="BtnStyleRound" Style="{StaticResource FlatToolButton}"
+                                                Width="32" Click="BtnStyleRound_Click">
+                                            <Border Width="14" Height="14" CornerRadius="4"
+                                                    BorderBrush="{DynamicResource Fg_333333}" BorderThickness="1.4"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Button>
+                                        <Button x:Name="BtnStyleSquare" Style="{StaticResource FlatToolButton}"
+                                                Width="32" Margin="4,0,0,0" Click="BtnStyleSquare_Click">
+                                            <Border Width="14" Height="14" CornerRadius="1.5"
+                                                    BorderBrush="{DynamicResource Fg_333333}" BorderThickness="1.4"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Button>
+                                    </StackPanel>
+                            </WrapPanel>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 预览 / 编辑区（缩放后可滚动） -->
+        <Border x:Name="StageArea" Grid.Row="1" Margin="20,0,20,10" CornerRadius="8"
+                Background="{DynamicResource Bg_F0F0F0}" ClipToBounds="True">
+            <ScrollViewer x:Name="StageScroll" Background="Transparent"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                          HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                          PanningMode="Both"
+                          PreviewMouseWheel="StageScroll_PreviewMouseWheel">
+                <Grid x:Name="ZoomHost">
+                    <Grid.LayoutTransform>
+                        <ScaleTransform x:Name="ZoomScale" ScaleX="1" ScaleY="1"/>
+                    </Grid.LayoutTransform>
+
+                    <Grid x:Name="Stage" HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Background="Transparent" Cursor="IBeam" Focusable="True"
+                          MouseLeftButtonDown="Stage_MouseLeftButtonDown"
+                          MouseMove="Stage_MouseMove"
+                          MouseLeftButtonUp="Stage_MouseLeftButtonUp"
+                          MouseLeave="Stage_MouseLeave"
+                          PreviewMouseRightButtonDown="Stage_PreviewMouseRightButtonDown"
+                          KeyDown="Stage_KeyDown">
+                        <!-- 底图不参与命中测试：否则视频 / 图片会抢走橡皮擦的点击 -->
+                        <Image x:Name="BaseImage" Stretch="Fill" IsHitTestVisible="False"/>
+                        <MediaElement x:Name="VideoPreview" LoadedBehavior="Manual"
+                                      Stretch="UniformToFill" Visibility="Collapsed"
+                                      IsHitTestVisible="False"
+                                      MediaOpened="VideoPreview_MediaOpened"
+                                      MediaEnded="VideoPreview_MediaEnded"/>
+                        <!-- 3.33：已固定的批注（旧批注层 + 橡皮擦栅格化后的内容）都画在这张位图上，
+                             矢量文字 / 笔迹在它上面。橡皮擦直接擦这张位图的方形区域（与画图 / PS 一致）。 -->
+                        <Image x:Name="RasterLayer" Stretch="Fill" IsHitTestVisible="False"
+                               Visibility="Collapsed" Panel.ZIndex="1"/>
+                        <!-- 文字层 / 笔迹层的 ZIndex 由代码按「谁最近被操作」动态交换；
+                             虚线框与橡皮擦方框必须始终压在上面，所以单独给更高的 ZIndex。 -->
+                        <InkCanvas x:Name="InkLayer" IsHitTestVisible="False" Background="Transparent"
+                                   Panel.ZIndex="2"/>
+                        <Canvas x:Name="TextLayer" Background="Transparent" IsHitTestVisible="True"
+                                Panel.ZIndex="3"/>
+                        <!-- 3.41：SelectionLayer 自身没有背景，只有「旋转」按钮可命中；
+                             虚线框 / 控制点 / 橡皮方框都显式设了 IsHitTestVisible=False。 -->
+                        <Canvas x:Name="SelectionLayer" IsHitTestVisible="True" Panel.ZIndex="10"/>
+                        <TextBlock x:Name="EmptyHint" Text="点击左上角「导入封面」选择封面图片、GIF 或视频"
+                                   Foreground="#FF808080" FontSize="14"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False" Panel.ZIndex="11"/>
+                    </Grid>
+                </Grid>
+            </ScrollViewer>
+        </Border>
+
+        <!-- 3.38：卡池还没有封面时的空状态页（白色页面，上方工具栏与下方缩放条都收起） -->
+        <Grid x:Name="EmptyCoverPanel" Grid.Row="1" Visibility="Collapsed"
+              Background="{DynamicResource Bg_FFFFFF}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xEB9F;" FontFamily="{StaticResource AppIconFont}"
+                           FontSize="46" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource Fg_808080}"/>
+                <TextBlock Text="未添加封面" FontSize="15" Margin="0,12,0,0"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource Fg_333333}"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
+                    <Button x:Name="BtnAddCoverEmpty" Width="110" Height="32"
+                            Style="{StaticResource ModernSelectButtonStyle}"
+                            Content="添加封面" IsDefault="True" Click="BtnImport_Click"/>
+                    <Button x:Name="BtnEditDefaultCover" Width="128" Height="32" Margin="12,0,0,0"
+                            Style="{StaticResource ModernSelectButtonStyle}"
+                            Content="编辑默认封面" Click="BtnEditDefaultCover_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- 3.35：缩放移到下方，音量条外观（灰色填充，不用蓝色）
+             3.36：底部整行水平居中；视频 / GIF 在取色时多显示一条媒体进度条 -->
+        <Grid x:Name="BottomArea" Grid.Row="2" Margin="20,0,20,14">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Border Background="{DynamicResource Ui.CardBg}"
+                        BorderBrush="{DynamicResource Ui.CardBorder}"
+                        BorderThickness="1" CornerRadius="10"
+                        Padding="12,6">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="缩放" FontSize="13" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Fg_808080}" Margin="2,0,10,0"/>
+                        <Button x:Name="BtnZoomOut" Style="{StaticResource FlatToolButton}"
+                                Width="26" Height="26" Click="BtnZoomOut_Click">
+                            <TextBlock Text="&#xE738;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="12" VerticalAlignment="Center"/>
+                        </Button>
+                        <Slider x:Name="SlZoom" Width="190" Margin="4,0"
+                                Style="{StaticResource VolumeSliderStyle}"
+                                Minimum="10" Maximum="400" Value="100"
+                                SmallChange="5" LargeChange="10"
+                                VerticalAlignment="Center"
+                                PreviewMouseWheel="SlZoom_PreviewMouseWheel"
+                                ValueChanged="SlZoom_ValueChanged"/>
+                        <Button x:Name="BtnZoomIn" Style="{StaticResource FlatToolButton}"
+                                Width="26" Height="26" Click="BtnZoomIn_Click">
+                            <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="12" VerticalAlignment="Center"/>
+                        </Button>
+                        <Border Width="1" Height="16" Margin="10,0"
+                                Background="{DynamicResource Bd_E5E7EB}"/>
+                        <TextBlock x:Name="TxtZoom" Text="100%" Width="46" FontSize="13"
+                                   TextAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Fg_333333}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 3.36：媒体进度条 —— 进入取色模式时出现（视频 / GIF 可以先暂停再取色） -->
+                <Border x:Name="MediaBarCard" Visibility="Collapsed" Margin="8,0,0,0"
+                        Background="{DynamicResource Ui.CardBg}"
+                        BorderBrush="{DynamicResource Ui.CardBorder}"
+                        BorderThickness="1" CornerRadius="10" Padding="8,6">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="BtnMediaPlayPause" Style="{StaticResource FlatToolButton}"
+                                Width="26" Height="26" Click="BtnMediaPlayPause_Click">
+                            <TextBlock x:Name="TxtMediaPlayPause" Text="&#xE769;"
+                                       FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="12" VerticalAlignment="Center"/>
+                        </Button>
+                        <Slider x:Name="SlMediaProgress" Width="170" Margin="6,0,6,0"
+                                Style="{StaticResource VolumeSliderStyle}"
+                                Minimum="0" Maximum="100" Value="0"
+                                SmallChange="1" LargeChange="10"
+                                VerticalAlignment="Center"
+                                ValueChanged="SlMediaProgress_ValueChanged"/>
+                        <TextBlock x:Name="TxtMediaTime" Text="0:00 / 0:00" FontSize="12"
+                                   Width="96" TextAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Fg_808080}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- 3.32：颜色面板改为内嵌浮层（类似系统的气泡提示），不再弹独立对话框。
+             顶部的小三角指向被点击的「颜色」按钮；卡片颜色全部走主题资源，深色模式自动跟随。 -->
+        <Popup x:Name="ColorPopup" Placement="Bottom" StaysOpen="False"
+               AllowsTransparency="True" PopupAnimation="Fade" IsHitTestVisible="True"
+               Opened="ColorPopup_Opened">
+            <!-- 3.39：外层留出投影空间（Popup 会把超出内容的阴影裁掉） -->
+            <Grid Margin="20,22,20,26">
+              <Grid x:Name="ColorCard" Width="346" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <!-- 尖角：填充盖住卡片顶边，两条斜边与卡片边框连成一体 -->
+                <Canvas x:Name="ColorPopupArrow" Width="14" Height="8" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="24,-7,0,0" Panel.ZIndex="2">
+                    <Path Data="M0,7 L7,0 L14,7 Z" Fill="{DynamicResource Ui.CardBg}"/>
+                    <Polyline Points="0,7 7,0 14,7" Stroke="{DynamicResource Ui.CardBorder}" StrokeThickness="1"/>
+                </Canvas>
+
+                <Border Background="{DynamicResource Ui.CardBg}"
+                        BorderBrush="{DynamicResource Ui.CardBorder}"
+                        BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,1,0,0">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="20" ShadowDepth="3" Opacity="0.22" Color="#000000"/>
+                    </Border.Effect>
+                    <local:ColorPickerPanel x:Name="ColorPanel"/>
+                </Border>
+              </Grid>
+            </Grid>
+        </Popup>
+    </Grid>
+</UserControl>

@@ -1,0 +1,852 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls.Primitives;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using RandomDrawer.Messaging;
+
+namespace RandomDrawer
+{
+    public partial class HistoryPage_UC : UserControl, IPageAnimation
+    {
+        private class PoolEntry
+        {
+            public string DisplayName { get; set; }
+            public string Dir { get; set; }
+        }
+        private List<PoolEntry> _allPoolEntries = new List<PoolEntry>();
+
+        private bool _showAll;
+        private int _currentPage = 1;
+
+        public void PlayEnterAsReverseAnimation(Action onComplete)
+        {
+            PlayEnterAnimation(onComplete);
+        }
+        private int _totalPages = 1;
+        private const int PageSize = 10;
+        private string _currentPoolDir = "";
+        private List<string> _poolHeaders = new List<string>();
+        private int _probIndex = -1;
+        private int _catIndex = -1;
+        private DataView _historyView;
+        private DataTable _historyTable;
+        private string _historySearchText = "";
+        // 点击表头排序后，关键词只在这一列里搜索；空表示搜索全部列
+        private string _searchColumn = null;
+        private Popup _searchHint;
+
+        private bool _enableStarColor = false;
+        private HighlightConfig _highlight = null;
+
+        private const string CategoryColumnName = "_Category";
+
+        private double _lastEnterFromX = 0;
+        private double _lastEnterFromY = 0;
+
+        private Action<AppMessages.PageActivated> _onPageActivated;
+        private Action<AppMessages.PoolListChanged> _onPoolListChanged;
+
+        public HistoryPage_UC()
+        {
+            InitializeComponent();
+
+            try { _showAll = IniHelper.ReadValue("UI", "HistoryShowAll", "0", App.SettingsFile) == "1"; } catch { }
+            Loaded += (s, e) =>
+            {
+                UpdateViewModeButton();
+                UpdateReportButtonVisibility();
+            };
+
+            HistoryGrid.AutoGeneratingColumn += HistoryGrid_AutoGeneratingColumn;
+
+            // 行虚拟化后布局仍会变化，靠 LayoutUpdated 保证滚动条状态与范围始终最新
+            HistoryGrid.LayoutUpdated += (s, e) =>
+            {
+                try
+                {
+                    if (_gridScroll == null) AttachGridScrollBar();
+                    else UpdateGridScrollBar();
+                }
+                catch { }
+            };
+
+            _onPageActivated = OnPageActivated;
+            _onPoolListChanged = OnPoolListChanged;
+            MessageBus.Subscribe(_onPageActivated);
+            MessageBus.Subscribe(_onPoolListChanged);
+
+            Loaded += OnLoaded;
+            Unloaded += OnUnloaded;
+
+            // 搜索框里按 Esc：取消「仅搜索某一列」，恢复搜索全部列
+            SearchHistory.PreviewKeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Escape && _searchColumn != null)
+                {
+                    ClearSearchColumnScope();
+                    e.Handled = true;
+                }
+            };
+        }
+
+        public void PlayEnterAnimation(Action onComplete)
+        {
+            double fromX = 0, fromY = 0;
+            var src = NavigationContext.CurrentSource;
+
+            if (src == PageEnterSource.Main) fromY = 60;
+            else fromX = 80;
+
+            _lastEnterFromX = fromX;
+            _lastEnterFromY = fromY;
+
+            if (src == PageEnterSource.Main)
+            {
+                SlideInAnimationHelper.PlaySlideIn(this, fromX, fromY,
+                    TimeSpan.FromMilliseconds(420), onComplete);
+            }
+            else
+            {
+                SlideInAnimationHelper.PlaySlideIn(this, fromX, fromY, onComplete);
+            }
+        }
+
+        public void PlayExitAnimation(Action onComplete)
+        {
+            SlideInAnimationHelper.PlaySlideOut(this, _lastEnterFromX, _lastEnterFromY, onComplete);
+        }
+
+        private void OnLoaded(object sender, RoutedEventArgs e)
+        {
+            LoadPoolComboBox();
+            UpdateNoPoolState();
+            RestoreLastSelection();
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            MessageBus.Unsubscribe(_onPageActivated);
+            MessageBus.Unsubscribe(_onPoolListChanged);
+            HideSearchHint();
+
+            // 页面缓存会长期保留实例：离开时释放大表格，避免历史记录多时占用持续增长
+            try
+            {
+                if (HistoryGrid != null) HistoryGrid.ItemsSource = null;
+                _historyTable?.Clear();
+                _historyTable = null;
+                _historyView = null;
+            }
+            catch { }
+        }
+
+        private void OnPageActivated(AppMessages.PageActivated msg)
+        {
+            if (msg == null || msg.PageKey != "History") return;
+            LoadPoolComboBox();
+            UpdateNoPoolState();
+            RestoreLastSelection();
+        }
+
+        private void OnPoolListChanged(AppMessages.PoolListChanged msg)
+        {
+            Dispatcher.Invoke(new Action(() =>
+            {
+                LoadPoolComboBox();
+                UpdateNoPoolState();
+                RestoreLastSelection();
+            }));
+        }
+
+        private void RestoreLastSelection()
+        {
+            int idx = -1;
+            if (!string.IsNullOrEmpty(App.LastSelectedPoolDir))
+                idx = _allPoolEntries.FindIndex(p => p.Dir == App.LastSelectedPoolDir);
+            if (idx < 0 && !string.IsNullOrEmpty(App.LastSelectedPoolName))
+                idx = _allPoolEntries.FindIndex(p => p.DisplayName == App.LastSelectedPoolName
+                                                  || Path.GetFileName(p.Dir) == App.LastSelectedPoolName);
+
+            if (idx >= 0) ComboPools.SelectedIndex = idx;
+            else if (ComboPools.Items.Count > 0) ComboPools.SelectedIndex = 0;
+        }
+
+        private void HistoryGrid_AutoGeneratingColumn(object sender, DataGridAutoGeneratingColumnEventArgs e)
+        {
+            if (e.PropertyName == CategoryColumnName) e.Cancel = true;
+        }
+
+        private void LoadPoolComboBox()
+        {
+            ComboPools.Items.Clear();
+            _allPoolEntries.Clear();
+            var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var baseDir in App.SearchDirectories)
+            {
+                if (!Directory.Exists(baseDir)) continue;
+                foreach (var subDir in Directory.GetDirectories(baseDir).OrderBy(d => d))
+                {
+                    string poolName = Path.GetFileName(subDir);
+                    string uniqueName = poolName;
+                    int suffix = 2;
+                    while (usedNames.Contains(uniqueName))
+                    {
+                        uniqueName = $"{poolName} [{suffix}]";
+                        suffix++;
+                    }
+                    usedNames.Add(uniqueName);
+
+                    _allPoolEntries.Add(new PoolEntry { DisplayName = uniqueName, Dir = subDir });
+                    ComboPools.Items.Add(uniqueName);
+                }
+            }
+        }
+
+        /// <summary>没有任何卡池时，整页显示居中的空状态。</summary>
+        private void UpdateNoPoolState()
+        {
+            if (NoPoolPanel == null) return;
+            bool hasPools = _allPoolEntries != null && _allPoolEntries.Count > 0;
+            NoPoolPanel.Visibility = hasPools ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void ComboPools_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ComboPools.SelectedIndex < 0 || ComboPools.SelectedIndex >= _allPoolEntries.Count) return;
+
+            _currentPoolDir = _allPoolEntries[ComboPools.SelectedIndex].Dir;
+
+            MessageBus.Publish(new AppMessages.CurrentPoolChanged(_currentPoolDir));
+
+            _highlight = null;
+            _enableStarColor = false;
+
+            try
+            {
+                string gachaFile = Path.Combine(_currentPoolDir, "gacha_settings.ini");
+                if (File.Exists(gachaFile))
+                {
+                    var gs = GachaSettings.LoadSettingsFromFile(gachaFile);
+                    if (gs != null)
+                    {
+                        _enableStarColor = gs.EnableStarColor;
+                        _highlight = HighlightConfig.FromSettings(gs);
+                    }
+                }
+            }
+            catch
+            {
+                _highlight = null;
+                _enableStarColor = false;
+            }
+
+            _currentPage = 1;
+            LoadPage();
+        }
+
+        private void LoadRealHeaders()
+        {
+            _poolHeaders.Clear();
+            _probIndex = -1;
+            _catIndex = -1;
+
+            string lockFile = Path.Combine(_currentPoolDir, "data.lock");
+            string txtFile = Path.Combine(_currentPoolDir, "data.txt");
+            string content = "";
+
+            try
+            {
+                if (File.Exists(lockFile)) content = CryptoUtils.DecryptString(File.ReadAllText(lockFile));
+                else if (File.Exists(txtFile)) content = CryptoUtils.ReadAllTextWithEncoding(txtFile);
+
+                if (!string.IsNullOrEmpty(content))
+                {
+                    var firstLine = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                    if (firstLine != null)
+                    {
+                        _poolHeaders = firstLine.Split(new[] { ' ', '\t', '\u3000' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                        _probIndex = _poolHeaders.IndexOf("概率");
+                        _catIndex = _poolHeaders.IndexOf("分类");
+                    }
+                }
+            }
+            catch { }
+
+            if (_poolHeaders.Count == 0)
+            {
+                _poolHeaders.Add("字段1");
+                _poolHeaders.Add("字段2");
+            }
+        }
+
+        private void SetEmptyStateVisible(bool visible)
+        {
+            if (EmptyHistoryPanel == null || HistoryGridContainer == null) return;
+            EmptyHistoryPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            HistoryGridContainer.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void ShowEmptyPage()
+        {
+            HistoryGrid.ItemsSource = null;
+            _historyTable = null;
+            _historyView = null;
+            if (SearchEmptyPanel != null) SearchEmptyPanel.Visibility = Visibility.Collapsed;
+            TxtPage.Text = "第 1 页 / 共 1 页";
+            _totalPages = 1;
+            _currentPage = 1;
+            SetEmptyStateVisible(true);
+
+            // ★ 禁用重置按钮
+            if (BtnReset != null) BtnReset.IsEnabled = false;
+        }
+
+        private void LoadPage()
+        {
+            LoadRealHeaders();
+
+            string historyFile = Path.Combine(_currentPoolDir, "history.txt");
+            if (!File.Exists(historyFile)) { ShowEmptyPage(); return; }
+
+            List<string> allLines;
+            try { allLines = File.ReadAllLines(historyFile).Reverse().ToList(); }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error(ex, $"读取历史记录失败：{historyFile}");
+                ShowEmptyPage();
+                return;
+            }
+            RuntimeLog.Info($"读取历史记录：卡池={_currentPoolDir}，总行数={allLines.Count}，页码={_currentPage}，搜索={_historySearchText}");
+
+            if (allLines.Count == 0) { ShowEmptyPage(); return; }
+
+            SetEmptyStateVisible(false);
+
+            // ★ 启用重置按钮
+            if (BtnReset != null) BtnReset.IsEnabled = true;
+
+            int pageSize = _showAll ? Math.Max(1, allLines.Count) : PageSize;
+            _totalPages = _showAll ? 1 : (int)Math.Ceiling((double)allLines.Count / PageSize);
+            if (_totalPages == 0) _totalPages = 1;
+            if (_currentPage > _totalPages) _currentPage = _totalPages;
+            if (_currentPage < 1) _currentPage = 1;
+
+            var pageLines = _showAll
+                ? allLines.ToList()
+                : allLines.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+
+            var parsedRows = new List<Tuple<string, string, List<string>, string>>();
+            int maxDataCols = 0;
+
+            foreach (var line in pageLines)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                string time = "";
+                string type = "";
+                var fieldParts = new List<string>();
+
+                if (line.Contains("|"))
+                {
+                    var pipeParts = line.Split('|').ToList();
+
+                    if (pipeParts.Count > 0 && DateTime.TryParse(pipeParts[0], out _))
+                    {
+                        time = pipeParts[0];
+                        pipeParts.RemoveAt(0);
+                    }
+
+                    if (pipeParts.Count > 0 && pipeParts[0].Contains("抽取"))
+                    {
+                        type = pipeParts[0];
+                        pipeParts.RemoveAt(0);
+                    }
+
+                    foreach (var p in pipeParts)
+                        fieldParts.AddRange(p.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries));
+                }
+                else
+                {
+                    fieldParts.AddRange(line.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries));
+                }
+
+                string category = "";
+                if (_catIndex >= 0 && _catIndex < fieldParts.Count)
+                    category = (fieldParts[_catIndex] ?? "").Trim();
+
+                if (_probIndex >= 0 && _probIndex < fieldParts.Count)
+                    fieldParts.RemoveAt(_probIndex);
+
+                maxDataCols = Math.Max(maxDataCols, fieldParts.Count);
+                parsedRows.Add(Tuple.Create(time, type, fieldParts, category));
+            }
+
+            DataTable dt = new DataTable();
+            dt.Columns.Add("抽取时间", typeof(string));
+            dt.Columns.Add("抽取类型", typeof(string));
+
+            for (int i = 0; i < _poolHeaders.Count; i++)
+            {
+                if (i == _probIndex) continue;
+                string colName = _poolHeaders[i];
+                if (dt.Columns.Contains(colName)) colName = $"{colName}_{i}";
+                dt.Columns.Add(colName, typeof(string));
+            }
+
+            int displayedHeaderCount = _poolHeaders.Count - (_probIndex >= 0 ? 1 : 0);
+            for (int i = displayedHeaderCount; i < maxDataCols; i++)
+                dt.Columns.Add($"列{i + 1}", typeof(string));
+
+            dt.Columns.Add(CategoryColumnName, typeof(string));
+
+            foreach (var t in parsedRows)
+            {
+                DataRow dr = dt.NewRow();
+                dr[0] = t.Item1;
+                dr[1] = t.Item2;
+
+                var fields = t.Item3;
+                for (int i = 0; i < fields.Count; i++)
+                {
+                    int colIndex = 2 + i;
+                    if (colIndex < dt.Columns.Count - 1)
+                        dr[colIndex] = fields[i];
+                }
+
+                dr[CategoryColumnName] = t.Item4 ?? "";
+                dt.Rows.Add(dr);
+            }
+
+            HistoryGrid.ItemsSource = dt.DefaultView;
+            _historyTable = dt;
+            _historyView = dt.DefaultView;
+            // 重新建表后排序状态会丢失，搜索范围也回到「全部列」
+            _searchColumn = null;
+            ApplyHistorySearch();
+            TxtPage.Text = $"第 {_currentPage} 页 / 共 {_totalPages} 页";
+        }
+
+        private void SearchHistory_SearchChanged(string text)
+        {
+            _historySearchText = text ?? "";
+            ApplyHistorySearch();
+        }
+
+        /// <summary>
+        /// 点击表头排序：记录当前列，关键词只在这一列里搜索（再次点击同一列表头仍保持该列）。
+        /// </summary>
+        private void HistoryGrid_Sorting(object sender, DataGridSortingEventArgs e)
+        {
+            try
+            {
+                string column = e.Column?.SortMemberPath;
+                if (string.IsNullOrWhiteSpace(column) && e.Column?.Header is string header) column = header;
+                if (string.IsNullOrWhiteSpace(column)) return;
+
+                _searchColumn = column;
+                // 排序由 DataGrid 默认处理，等它排序完再按新范围过滤
+                Dispatcher.BeginInvoke(new Action(ApplyHistorySearch),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch { }
+        }
+
+        /// <summary>取消「仅搜索某一列」并清掉排序箭头。</summary>
+        private void ClearSearchColumnScope()
+        {
+            _searchColumn = null;
+
+            // DataView 的排序是字符串 Sort，置空即取消排序
+            try { if (_historyView != null) _historyView.Sort = ""; } catch { }
+            try
+            {
+                if (HistoryGrid?.Columns != null)
+                {
+                    foreach (var column in HistoryGrid.Columns) column.SortDirection = null;
+                }
+            }
+            catch { }
+
+            ApplyHistorySearch();
+        }
+
+        private void SearchHistory_MouseEnter(object sender, MouseEventArgs e) => ShowSearchHint(e.GetPosition(this));
+
+        private void SearchHistory_MouseMove(object sender, MouseEventArgs e) => ShowSearchHint(e.GetPosition(this));
+
+        private void SearchHistory_MouseLeave(object sender, MouseEventArgs e) => HideSearchHint();
+
+        private void EnsureSearchHint()
+        {
+            if (_searchHint != null) return;
+
+            var text = new TextBlock
+            {
+                Text = "将默认搜索列表中全部关键词，点击任意列的表头可设置仅在此列搜索。",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 300
+            };
+            text.SetResourceReference(TextBlock.ForegroundProperty, "Ui.TitleText");
+
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(10, 7, 10, 7),
+                Child = text,
+                IsHitTestVisible = false
+            };
+            border.SetResourceReference(Border.BackgroundProperty, "Ui.CardBg");
+            border.SetResourceReference(Border.BorderBrushProperty, "Ui.CardBorder");
+
+            _searchHint = new Popup
+            {
+                Child = border,
+                AllowsTransparency = true,
+                StaysOpen = true,
+                IsHitTestVisible = false,
+                Focusable = false,
+                Placement = PlacementMode.Relative,
+                PlacementTarget = this
+            };
+        }
+
+        /// <summary>提示气泡始终跟随鼠标，并保证不越出页面边界。</summary>
+        private void ShowSearchHint(Point pos)
+        {
+            try
+            {
+                if (IsVisible == false) return;
+                EnsureSearchHint();
+                if (_searchHint?.Child == null) return;
+
+                _searchHint.Child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var size = _searchHint.Child.DesiredSize;
+
+                double x = pos.X + 16;
+                double y = pos.Y + 22;
+                if (x + size.Width > ActualWidth - 8) x = Math.Max(8, pos.X - size.Width - 16);
+                if (y + size.Height > ActualHeight - 8) y = Math.Max(8, pos.Y - size.Height - 12);
+
+                _searchHint.HorizontalOffset = x;
+                _searchHint.VerticalOffset = y;
+                if (!_searchHint.IsOpen) _searchHint.IsOpen = true;
+            }
+            catch { }
+        }
+
+        private void HideSearchHint()
+        {
+            try { if (_searchHint != null && _searchHint.IsOpen) _searchHint.IsOpen = false; } catch { }
+        }
+
+        private void ApplyHistorySearch()
+        {
+            if (SearchEmptyPanel == null) return;
+            if (_historyView == null)
+            {
+                SearchEmptyPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            string query = (_historySearchText ?? "").Trim();
+            if (query.Length == 0)
+            {
+                try { _historyView.RowFilter = ""; } catch { }
+                SearchEmptyPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            string escaped = query.Replace("'", "''")
+                                  .Replace("[", "[[]")
+                                  .Replace("%", "[%]")
+                                  .Replace("_", "[_]");
+            var stringColumns = _historyTable == null
+                ? new List<DataColumn>()
+                : _historyTable.Columns.Cast<DataColumn>()
+                    .Where(c => c.DataType == typeof(string)).ToList();
+
+            if (stringColumns.Count == 0)
+            {
+                SearchEmptyPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // 点击过表头后只在该列搜索；该列不存在时退回搜索全部列
+            List<DataColumn> targetColumns = stringColumns;
+            if (!string.IsNullOrEmpty(_searchColumn))
+            {
+                var only = stringColumns.FirstOrDefault(c =>
+                    string.Equals(c.ColumnName, _searchColumn, StringComparison.Ordinal));
+                if (only != null) targetColumns = new List<DataColumn> { only };
+            }
+
+            string filter = string.Join(" OR ", targetColumns.Select(c =>
+            {
+                string name = c.ColumnName.Replace("]", "]]");
+                return $"[{name}] LIKE '%{escaped}%'";
+            }));
+
+            try
+            {
+                _historyView.RowFilter = filter;
+                SearchEmptyPanel.Visibility = _historyView.Count == 0
+                    ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch
+            {
+                try { _historyView.RowFilter = ""; } catch { }
+                SearchEmptyPanel.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void HistoryGrid_LoadingRow(object sender, DataGridRowEventArgs e)
+        {
+            try
+            {
+                var rowView = e.Row.Item as DataRowView;
+                string category = "";
+                if (rowView != null && rowView.DataView.Table.Columns.Contains(CategoryColumnName))
+                    category = rowView[CategoryColumnName]?.ToString() ?? "";
+
+                if (_highlight != null && _highlight.Enabled)
+                {
+                    var brush = _highlight.GetBrushByCategory(category);
+                    if (brush != null) e.Row.Foreground = brush;
+                    else try { e.Row.ClearValue(DataGridRow.ForegroundProperty); } catch { }
+                }
+                else
+                {
+                    try { e.Row.ClearValue(DataGridRow.ForegroundProperty); } catch { }
+                }
+
+                if (_enableStarColor && !string.IsNullOrEmpty(category))
+                {
+                    int starCount = 0;
+                    foreach (char c in category) if (c == '★' || c == '⭐') starCount++;
+
+                    if (starCount == 5)
+                        e.Row.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF3B0"));
+                    else if (starCount == 4)
+                        e.Row.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E8D5F5"));
+                    else
+                        e.Row.Background = null;
+                }
+                else
+                {
+                    e.Row.Background = null;
+                }
+            }
+            catch
+            {
+                e.Row.Background = null;
+                try { e.Row.ClearValue(DataGridRow.ForegroundProperty); } catch { }
+            }
+        }
+
+        public void GoToNextPage()
+        {
+            if (_currentPage < _totalPages) { _currentPage++; LoadPage(); }
+        }
+
+        public void GoToPrevPage()
+        {
+            if (_currentPage > 1) { _currentPage--; LoadPage(); }
+        }
+
+        private void PrevPage_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentPage > 1) { _currentPage--; LoadPage(); }
+        }
+
+        private void NextPage_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentPage < _totalPages) { _currentPage++; LoadPage(); }
+        }
+
+        private bool HasActiveGachaStrategy()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_currentPoolDir)) return false;
+                string file = Path.Combine(_currentPoolDir, "gacha_settings.ini");
+                if (!File.Exists(file)) return false;
+                var s = GachaSettings.LoadSettingsFromFile(file);
+                return s != null && s.Enabled;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>按页查看 / 全部显示 切换（状态保存在 settings.ini）。</summary>
+        private void BtnViewMode_Click(object sender, RoutedEventArgs e)
+        {
+            _showAll = !_showAll;
+            try { IniHelper.WriteValue("UI", "HistoryShowAll", _showAll ? "1" : "0", App.SettingsFile); } catch { }
+            UpdateViewModeButton();
+            _currentPage = 1;
+            LoadPage();
+        }
+
+        private void UpdateReportButtonVisibility()
+        {
+            try
+            {
+                if (BtnHistoryReport != null)
+                    BtnHistoryReport.Visibility = App.IsGachaReportVisible ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch { }
+        }
+        private void UpdateViewModeButton()
+        {
+            try
+            {
+                // 按钮显示的是「点一下会切换到的模式」，而不是当前模式
+                if (TxtViewMode != null) TxtViewMode.Text = _showAll ? "按页查看" : "全部显示";
+                if (TxtViewModeIcon != null) TxtViewModeIcon.Text = _showAll ? "\uE7C3" : "\uE8FD";
+
+                // 全部显示模式：隐藏下方翻页按钮与页码
+                if (PagerPanel != null) PagerPanel.Visibility = _showAll ? Visibility.Collapsed : Visibility.Visible;
+            }
+            catch { }
+        }
+
+        private void BtnHistoryReport_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_currentPoolDir)) return;
+
+                App.LastSelectedPoolDir = _currentPoolDir;
+                App.GachaReportReturnPage = "History";
+                App.SaveSettings();
+
+                MessageBus.Publish(new AppMessages.NavigateTo("GachaReport"));
+            }
+            catch { }
+        }
+        private ScrollViewer _gridScroll;
+        private bool _syncingScrollBar;
+
+        private static void CollectScrollViewers(DependencyObject root, List<ScrollViewer> list)
+        {
+            if (root == null) return;
+            if (root is ScrollViewer sv) list.Add(sv);
+
+            int count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+                CollectScrollViewers(VisualTreeHelper.GetChild(root, i), list);
+        }
+
+        private static DataGridColumnHeadersPresenter FindHeadersPresenter(DependencyObject root)
+        {
+            if (root == null) return null;
+            if (root is DataGridColumnHeadersPresenter p) return p;
+
+            int count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                var found = FindHeadersPresenter(VisualTreeHelper.GetChild(root, i));
+                if (found != null) return found;
+            }
+            return null;
+        }
+        /// <summary>把外层滚动条与 DataGrid 内部滚动区同步（轨道贯穿表头）。</summary>
+        private void AttachGridScrollBar()
+        {
+            try
+            {
+                var all = new List<ScrollViewer>();
+                CollectScrollViewers(HistoryGrid, all);
+
+                var sv = all.OrderByDescending(x => x.ExtentHeight).FirstOrDefault();
+                if (sv == null && all.Count > 0) sv = all[0];
+                if (ReferenceEquals(sv, _gridScroll)) { UpdateGridScrollBar(); return; }
+
+                if (_gridScroll != null) _gridScroll.ScrollChanged -= GridScroll_ScrollChanged;
+
+                _gridScroll = sv;
+                if (_gridScroll != null) _gridScroll.ScrollChanged += GridScroll_ScrollChanged;
+
+                UpdateGridScrollBar();
+            }
+            catch { }
+        }
+
+        private void GridScroll_ScrollChanged(object sender, ScrollChangedEventArgs e) => UpdateGridScrollBar();
+
+        private void UpdateGridScrollBar()
+        {
+            try
+            {
+                if (HistoryScrollBar == null) return;
+
+                if (_gridScroll == null)
+                {
+                    HistoryScrollBar.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                double max = Math.Max(0, _gridScroll.ScrollableHeight);
+                if (max <= 0) max = Math.Max(0, _gridScroll.ExtentHeight - _gridScroll.ViewportHeight);
+                HistoryScrollBar.Minimum = 0;
+                HistoryScrollBar.Maximum = max;
+                HistoryScrollBar.ViewportSize = Math.Max(1, _gridScroll.ViewportHeight);
+                HistoryScrollBar.LargeChange = Math.Max(1, _gridScroll.ViewportHeight * 0.9);
+                HistoryScrollBar.SmallChange = 32;
+
+                if (Math.Abs(HistoryScrollBar.Value - _gridScroll.VerticalOffset) > 0.5)
+                    HistoryScrollBar.Value = _gridScroll.VerticalOffset;
+
+                HistoryScrollBar.Visibility = max > 1 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch { }
+        }
+
+        private void HistoryScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
+        {
+            try
+            {
+                if (_gridScroll == null || _syncingScrollBar) return;
+                _syncingScrollBar = true;
+                _gridScroll.ScrollToVerticalOffset(HistoryScrollBar.Value);
+            }
+            catch { }
+            finally { _syncingScrollBar = false; }
+        }
+        private void BtnReset_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentPoolDir)) return;
+
+            bool isAdvanced = HasActiveGachaStrategy();
+
+            string message = isAdvanced
+                ? "确定要清空当前卡池的历史记录和保底状态吗？"
+                : "确定要清空当前卡池的历史记录吗？";
+
+            if (CustomMessageBox.Show(Window.GetWindow(this), message,
+                    "确认", MessageBoxButton.YesNo, MessageBoxImage.Question, yesText: "清空", yesIcon: "\uE74D", noIcon: "\uE711") != MessageBoxResult.Yes)
+                return;
+
+            string historyFile = Path.Combine(_currentPoolDir, "history.txt");
+            if (File.Exists(historyFile)) File.Delete(historyFile);
+
+            if (isAdvanced)
+            {
+                string gachaStateFile = Path.Combine(_currentPoolDir, "gacha_state.ini");
+                if (File.Exists(gachaStateFile)) File.Delete(gachaStateFile);
+            }
+
+            RuntimeLog.Info($"已清空历史记录：卡池={_currentPoolDir}，高级规则={isAdvanced}");
+            _currentPage = 1;
+            LoadPage();
+        }
+    }
+}

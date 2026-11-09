@@ -1,0 +1,358 @@
+<UserControl x:Class="RandomDrawer.WelcomePage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             xmlns:local="clr-namespace:RandomDrawer"
+             d:DesignHeight="700" d:DesignWidth="1000"
+             Background="{DynamicResource Ui.PageBg}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer x:Name="StepScroll" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      VerticalContentAlignment="Center" Padding="0">
+            <Border MaxWidth="760" Background="{DynamicResource Ui.CardBg}"
+                    BorderBrush="{DynamicResource Ui.CardBorder}" BorderThickness="1"
+                    CornerRadius="16" Padding="36,30" Margin="0,42,0,18">
+                <StackPanel>
+                    <!-- 翻页动画作用在 PageContentHost 上：顶部「欢迎使用…」与下面的「启动向导…」
+                         在同一个容器里，淡入 / 淡出和位移的时间、时刻完全一致（3.63） -->
+                    <Grid x:Name="PageContentHost">
+                        <Grid.RenderTransform>
+                            <TranslateTransform x:Name="PanelTransform"/>
+                        </Grid.RenderTransform>
+
+                        <StackPanel>
+                            <!-- 顶部：软件图标 + 标题（只在第 1 页显示） -->
+                            <StackPanel x:Name="HeaderPanel" Orientation="Horizontal" Margin="0,0,0,4">
+                                <Image Source="pack://application:,,,/随机抽取器;component/Assets/ico.png"
+                                       Width="44" Height="44" VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <StackPanel VerticalAlignment="Center" Margin="14,0,0,0">
+                                    <TextBlock x:Name="TxtWelcomeTitle" Text="欢迎使用随机抽取器" FontSize="22" FontWeight="Bold"
+                                               Foreground="{DynamicResource Fg_1F1F1F}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- 内容宿主：翻页动画作用在这一层（旧内容左移淡出 → 新内容右移淡入） -->
+                            <Grid x:Name="PanelHost" Margin="0,10,0,0" MinHeight="300">
+                        <!-- 板块 1：启动向导 -->
+                        <StackPanel x:Name="PanelWelcomeIntro" VerticalAlignment="Top">
+                            <TextBlock x:Name="TxtIntro" Text="启动向导将帮助您快速开始。" FontSize="15"
+                                       TextWrapping="Wrap" LineHeight="24" Margin="0,22,0,0"
+                                       Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+
+                        <!-- 板块 2：卡池文件夹（路径可以直接编辑） -->
+                        <StackPanel x:Name="PanelWelcomePools" Visibility="Collapsed" VerticalAlignment="Top">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Border Width="3" Height="22" CornerRadius="2" VerticalAlignment="Center"
+                                        Background="{DynamicResource Ui.AccentFill}"/>
+                                <TextBlock Text="创建或添加卡池文件夹" FontSize="20" FontWeight="Bold"
+                                           Margin="10,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_1F1F1F}"/>
+                            </StackPanel>
+                            <TextBlock Text="您的卡池数据将保存在这个文件夹内" TextWrapping="Wrap"
+                                       FontSize="13" LineHeight="24" Margin="0,0,0,14"
+                                       Foreground="{DynamicResource Fg_666666}"/>
+
+                            <Border Height="34" CornerRadius="6" Margin="0,0,0,6"
+                                    Background="{DynamicResource Bg_F5F5F5}"
+                                    BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                                    Padding="8,0" SnapsToDevicePixels="True">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                               VerticalAlignment="Center" Margin="0,0,8,0"
+                                               Foreground="{DynamicResource Fg_666666}"/>
+                                    <TextBox x:Name="TxtPoolDirBox" Grid.Column="1" FontSize="13" BorderThickness="0"
+                                             Background="Transparent" VerticalContentAlignment="Center"
+                                             TextWrapping="NoWrap" HorizontalScrollBarVisibility="Hidden"
+                                             VerticalScrollBarVisibility="Disabled" Padding="0"
+                                             ToolTip="可以直接输入或粘贴文件夹路径，按回车生效"
+                                             KeyDown="TxtPoolDirBox_KeyDown"
+                                             LostFocus="TxtPoolDirBox_LostFocus"/>
+                                    <!-- 空的时候给一句灰字，让人看得出这里可以直接输入 -->
+                                    <TextBlock Grid.Column="1" Text="输入或粘贴卡池文件夹路径" FontSize="13"
+                                               VerticalAlignment="Center" IsHitTestVisible="False"
+                                               Foreground="{DynamicResource Fg_BBBBBB}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Text, ElementName=TxtPoolDirBox}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock x:Name="TxtPoolDirHint" Text="可直接输入路径按回车生效，或点「浏览文件夹」选择"
+                                       FontSize="12" TextWrapping="Wrap" Margin="0,0,0,14"
+                                       Foreground="{DynamicResource Fg_888888}"/>
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="BtnPickPoolDir" Width="132" Height="36" Click="BtnPickPoolDir_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                        <TextBlock Text="浏览文件夹" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="BtnCreatePoolDir" Width="132" Height="36" Margin="10,0,0,0"
+                                        Click="BtnCreatePoolDir_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                        <TextBlock Text="默认位置创建" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 板块 3：资源文件夹（路径可以直接编辑） -->
+                        <StackPanel x:Name="PanelWelcomeResources" Visibility="Collapsed" VerticalAlignment="Top">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Border Width="3" Height="22" CornerRadius="2" VerticalAlignment="Center"
+                                        Background="{DynamicResource Ui.AccentFill}"/>
+                                <TextBlock Text="创建或添加资源文件夹" FontSize="20" FontWeight="Bold"
+                                           Margin="10,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_1F1F1F}"/>
+                            </StackPanel>
+                            <TextBlock Text="程序用到的背景音乐等资源文件可以放在这个文件夹内（可选，也可以稍后再设置）"
+                                       TextWrapping="Wrap"
+                                       FontSize="13" LineHeight="24" Margin="0,0,0,14"
+                                       Foreground="{DynamicResource Fg_666666}"/>
+
+                            <Border Height="34" CornerRadius="6" Margin="0,0,0,6"
+                                    Background="{DynamicResource Bg_F5F5F5}"
+                                    BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                                    Padding="8,0" SnapsToDevicePixels="True">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                               VerticalAlignment="Center" Margin="0,0,8,0"
+                                               Foreground="{DynamicResource Fg_666666}"/>
+                                    <TextBox x:Name="TxtResDirBox" Grid.Column="1" FontSize="13" BorderThickness="0"
+                                             Background="Transparent" VerticalContentAlignment="Center"
+                                             TextWrapping="NoWrap" HorizontalScrollBarVisibility="Hidden"
+                                             VerticalScrollBarVisibility="Disabled" Padding="0"
+                                             ToolTip="可以直接输入或粘贴文件夹路径，按回车生效"
+                                             KeyDown="TxtResDirBox_KeyDown"
+                                             GotFocus="TxtResDirBox_GotFocus"
+                                             LostFocus="TxtResDirBox_LostFocus"/>
+                                    <TextBlock Grid.Column="1" Text="输入或粘贴资源文件夹路径（可选）" FontSize="13"
+                                               VerticalAlignment="Center" IsHitTestVisible="False"
+                                               Foreground="{DynamicResource Fg_BBBBBB}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Text, ElementName=TxtResDirBox}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock x:Name="TxtResDirHint" Text="可直接输入路径按回车生效，或点「浏览文件夹」选择"
+                                       FontSize="12" TextWrapping="Wrap" Margin="0,0,0,14"
+                                       Foreground="{DynamicResource Fg_888888}"/>
+
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="BtnPickResDir" Width="132" Height="36" Click="BtnPickResDir_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                        <TextBlock Text="浏览文件夹" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="BtnCreateResDir" Width="132" Height="36" Margin="10,0,0,0"
+                                        Click="BtnCreateResDir_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                        <TextBlock Text="默认位置创建" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 板块 4：性能（标题加重突出；两个开关二选一） -->
+                        <StackPanel x:Name="PanelWelcomePerformance" Visibility="Collapsed" VerticalAlignment="Top">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Border Width="3" Height="22" CornerRadius="2" VerticalAlignment="Center"
+                                        Background="{DynamicResource Ui.AccentFill}"/>
+                                <TextBlock x:Name="TxtPerformanceTitle" Text="选择性能模式" FontSize="20"
+                                           FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_1F1F1F}"/>
+                            </StackPanel>
+                            <TextBlock Text="决定画面清晰度和内存占用，之后可以在「选项 → 常规」里随时修改。"
+                                       TextWrapping="Wrap" FontSize="13" LineHeight="24" Margin="0,0,0,16"
+                                       Foreground="{DynamicResource Fg_666666}"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Border x:Name="ModeStandardCard" CornerRadius="10" Padding="14,8" Cursor="Hand"
+                                        Background="{DynamicResource Bg_F5F5F5}"
+                                        BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                                        MouseLeftButtonDown="ModeStandardCard_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtStandardModeIcon" Text="&#xE930;"
+                                                   FontFamily="{StaticResource AppIconFont}" FontSize="16"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                                   Foreground="{DynamicResource Ui.AccentFill}"/>
+                                        <TextBlock Text="标准模式" FontSize="14" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="ModeLowCard" CornerRadius="10" Padding="14,8" Margin="12,0,0,0" Cursor="Hand"
+                                        Background="{DynamicResource Bg_F5F5F5}"
+                                        BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                                        MouseLeftButtonDown="ModeLowCard_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtLowModeIcon" Text="&#xE930;"
+                                                   FontFamily="{StaticResource AppIconFont}" FontSize="16"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource Ui.AccentFill}"/>
+                                        <TextBlock Text="低性能模式" FontSize="14" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <TextBlock x:Name="TxtModeHint" Text="标准模式：画面更清晰，占用内存更多。"
+                                       TextWrapping="Wrap" FontSize="12" LineHeight="22" Margin="0,0,0,22"
+                                       Foreground="{DynamicResource Fg_888888}"/>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                <TextBlock Text="视觉呈现模式" FontSize="14" VerticalAlignment="Center"
+                                           Width="100" TextAlignment="Left" Margin="0,0,12,0"
+                                           Foreground="{DynamicResource Fg_333333}"/>
+                                <ComboBox x:Name="ComboRenderPreference" Width="240" Height="30"
+                                          FontSize="13" VerticalAlignment="Center"
+                                          Style="{StaticResource AppComboBoxStyle}"
+                                          SelectionChanged="ComboRenderPreference_SelectionChanged">
+                                    <ComboBoxItem Content="流畅优先"/>
+                                    <ComboBoxItem Content="加载速度优先"/>
+                                </ComboBox>
+                                <!-- 与选项页「性能」卡片同款说明按钮；3.70：改为悬浮气泡，不再弹窗 -->
+                                <Border x:Name="InfoWelcomeRender" CornerRadius="12" Padding="6" Margin="6,0,0,0"
+                                        VerticalAlignment="Center" Cursor="Hand">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="&#xE9CE;" FontFamily="{StaticResource AppIconFont}"
+                                               FontSize="14" VerticalAlignment="Center" Foreground="{DynamicResource Fg_888888}"/>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 板块 5：主界面布局（3.71 起独立一页，样式与第 4 页一致） -->
+                        <StackPanel x:Name="PanelWelcomeLayout" Visibility="Collapsed" VerticalAlignment="Top">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Border Width="3" Height="22" CornerRadius="2" VerticalAlignment="Center"
+                                        Background="{DynamicResource Ui.AccentFill}"/>
+                                <TextBlock x:Name="TxtLayoutTitle" Text="选择主界面布局" FontSize="20"
+                                           FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_1F1F1F}"/>
+                            </StackPanel>
+                            <TextBlock Text="决定主界面底部信息的显示方式，之后可以在「选项 → 常规」里随时修改。"
+                                       TextWrapping="Wrap" FontSize="13" LineHeight="24" Margin="0,0,0,16"
+                                       Foreground="{DynamicResource Fg_666666}"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Border x:Name="LayoutCompactCard" CornerRadius="10" Padding="14,8" Cursor="Hand"
+                                        Background="{DynamicResource Bg_F5F5F5}"
+                                        BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                                        MouseLeftButtonDown="LayoutCompactCard_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtCompactLayoutIcon" Text="&#xE930;"
+                                                   FontFamily="{StaticResource AppIconFont}" FontSize="16"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                                   Foreground="{DynamicResource Ui.AccentFill}"/>
+                                        <TextBlock Text="简洁" FontSize="14" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Border x:Name="LayoutDetailedCard" CornerRadius="10" Padding="14,8" Margin="12,0,0,0" Cursor="Hand"
+                                        Background="{DynamicResource Bg_F5F5F5}"
+                                        BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                                        MouseLeftButtonDown="LayoutDetailedCard_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="TxtDetailedLayoutIcon" Text="&#xE930;"
+                                                   FontFamily="{StaticResource AppIconFont}" FontSize="16"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource Ui.AccentFill}"/>
+                                        <TextBlock Text="详细" FontSize="14" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Fg_333333}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <TextBlock x:Name="TxtLayoutHint"
+                                       Text="简洁：状态信息收进「抽取详情」面板，底部只留「不重复抽取」开关。"
+                                       TextWrapping="Wrap" FontSize="12" LineHeight="22" Margin="0,0,0,22"
+                                       Foreground="{DynamicResource Fg_888888}"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+            </Border>
+        </ScrollViewer>
+
+        <!-- 底部：上一页 / 下一页 -->
+        <Grid Grid.Row="1" Margin="30,0,30,22" MaxWidth="760">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="BtnPrev" Width="124" Height="36" IsEnabled="False" Click="BtnPrev_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72B;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                   VerticalAlignment="Center" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource Fg_333333}"/>
+                        <TextBlock Text="上一页" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="BtnNext" Width="124" Height="36" Margin="10,0,0,0" Click="BtnNext_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="TxtNextLabel" Text="下一页" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Fg_333333}"/>
+                        <TextBlock x:Name="TxtNextIcon" Text="&#xE72A;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource Fg_333333}"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

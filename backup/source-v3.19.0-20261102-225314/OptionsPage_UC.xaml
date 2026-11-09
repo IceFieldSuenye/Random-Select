@@ -1,0 +1,1057 @@
+<UserControl x:Class="RandomDrawer.OptionsPage_UC"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:RandomDrawer"
+             PreviewKeyDown="UC_PreviewKeyDown">
+
+    <UserControl.Resources>
+        <Style x:Key="NavRadioButtonStyle" TargetType="RadioButton">
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Foreground" Value="{DynamicResource Fg_333333}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="False"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_ECECEC}"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PlainListBoxItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CircularSliderStyle" TargetType="Slider">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid VerticalAlignment="Center" Background="Transparent">
+                            <Border Height="6" CornerRadius="3" Background="{DynamicResource Bg_E0E0E0}" VerticalAlignment="Center"/>
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="6" Background="{DynamicResource Bg_0078D7}"
+                                                        VerticalAlignment="Center"
+                                                        CornerRadius="3,0,0,3"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Background="Transparent" Height="6"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="22" Height="22" Focusable="False">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Background="Transparent">
+                                                    <Ellipse Fill="{DynamicResource Ui.SliderThumb}" Stroke="{DynamicResource Bd_0078D7}" StrokeThickness="2"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{DynamicResource Bg_FFFFFF}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="150"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Name="NavPanel" Background="{DynamicResource Bg_F5F5F5}" BorderBrush="{DynamicResource Bd_DDDDDD}" BorderThickness="0,0,1,0"
+                Opacity="0" RenderTransformOrigin="0,0.5">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="NavPanelTransform" X="-150"/>
+            </Border.RenderTransform>
+
+            <Grid x:Name="NavRoot" Margin="0,20,0,0">
+                <Border x:Name="NavFill" Height="50" Background="{DynamicResource Bg_E5F3FF}"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Top" IsHitTestVisible="False">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="NavFillTransform"/>
+                    </Border.RenderTransform>
+                </Border>
+
+                <Border x:Name="NavIndicator" Width="4" Height="50" Background="{DynamicResource Bg_0078D7}"
+                        HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="NavIndicatorTransform"/>
+                    </Border.RenderTransform>
+                </Border>
+
+                <StackPanel x:Name="NavStack">
+                    <RadioButton AutomationProperties.Name="常规" Name="NavNormal" Style="{StaticResource NavRadioButtonStyle}"
+                                 GroupName="NavGroup" IsChecked="True" Checked="Nav_Checked" Tag="0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xF0E2;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="常规" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton AutomationProperties.Name="卡池" Style="{StaticResource NavRadioButtonStyle}" GroupName="NavGroup" Checked="Nav_Checked" Tag="1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE715;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="卡池" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton AutomationProperties.Name="系统" Style="{StaticResource NavRadioButtonStyle}" GroupName="NavGroup" Checked="Nav_Checked" Tag="2">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE90F;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="系统" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton AutomationProperties.Name="帮助" Style="{StaticResource NavRadioButtonStyle}" GroupName="NavGroup" Checked="Nav_Checked" Tag="3">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9CE;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="帮助" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton AutomationProperties.Name="关于" Style="{StaticResource NavRadioButtonStyle}" GroupName="NavGroup" Checked="Nav_Checked" Tag="4">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE783;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                            <TextBlock Text="关于" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/>
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" Name="ContentPanel" Margin="30,30,0,30" Opacity="0" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="ContentPanelTransform" Y="60"/>
+            </Grid.RenderTransform>
+
+            <ScrollViewer PanningMode="VerticalOnly" Name="PanelNormal" VerticalScrollBarVisibility="Hidden" Margin="0"
+                          HorizontalScrollBarVisibility="Disabled" Padding="0,0,24,0">
+            <StackPanel>
+
+                <!-- ★ 外观（新增）：浅色 / 深色 / 跟随系统，全局生效 -->
+                <TextBlock Text="外观" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" Foreground="{DynamicResource Fg_333333}"/>
+                <Grid Margin="20,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="86"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="主题" VerticalAlignment="Center" Foreground="{DynamicResource Ui.TitleText}"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" Name="ComboTheme" AutomationProperties.Name="主题选择" Width="220" Height="30"
+                              HorizontalAlignment="Left"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              SelectionChanged="ComboTheme_SelectionChanged">
+                        <ComboBoxItem Content="跟随系统" Tag="system"/>
+                        <ComboBoxItem Content="浅色" Tag="light"/>
+                        <ComboBoxItem Content="深色" Tag="dark"/>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="右键菜单" VerticalAlignment="Center"
+                               Margin="0,10,0,0" Foreground="{DynamicResource Ui.TitleText}"/>
+                    <ComboBox Grid.Row="1" Grid.Column="1" Name="ComboContextMenuStyle"
+                              AutomationProperties.Name="右键菜单样式"
+                              Width="220" Height="30" Margin="0,10,0,0"
+                              HorizontalAlignment="Left"
+                              Style="{StaticResource AppComboBoxStyle}"
+                              SelectionChanged="ComboContextMenuStyle_SelectionChanged">
+                        <ComboBoxItem Content="现代" Tag="modern"/>
+                        <ComboBoxItem Content="经典" Tag="legacy"/>
+                    </ComboBox>
+
+                    <!-- ★ 窗口标题：支持 {version} {time} {date} {pool} {page}，留空用默认标题 -->
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="窗口标题" VerticalAlignment="Center"
+                               Margin="0,10,0,0" Foreground="{DynamicResource Ui.TitleText}"/>
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal"
+                                HorizontalAlignment="Left" Margin="0,10,0,0">
+                        <TextBox Name="TxtWindowTitle"
+                                 AutomationProperties.Name="窗口标题"
+                                 Width="320" Height="30" MaxLength="120"
+                                 VerticalContentAlignment="Center" Padding="8,0"
+                                 TextChanged="TxtWindowTitle_TextChanged"
+                                 MouseEnter="TxtWindowTitle_MouseEnter"
+                                 MouseMove="TxtWindowTitle_MouseMove"
+                                 MouseLeave="TxtWindowTitle_MouseLeave"/>
+                        <!-- 输入了会导致错误的字符时显示（正常时隐藏，不占位） -->
+                        <TextBlock Name="TxtWindowTitleInvalid" Text="" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"
+                                   Foreground="{DynamicResource Fg_D32F2F}"
+                                   IsHitTestVisible="False" Visibility="Collapsed"/>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="声音" FontSize="20" FontWeight="Bold" Margin="0,0,0,20" Foreground="{DynamicResource Fg_333333}"/>
+                <Grid Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox Name="ChkMusic" Content="开启背景音乐" VerticalAlignment="Center" Click="ChkMusic_Click"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <ComboBox Name="ComboMusic" Width="220" Height="28" Margin="10,0,0,0"
+                                  Style="{StaticResource AppComboBoxStyle}" SelectionChanged="ComboMusic_SelectionChanged"/>
+                        <Button x:Name="BtnImportMusic" Width="80" Height="28" Margin="5,0,0,0" Click="BtnImportMusic_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="导入音乐" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="BtnRefreshMusic" Width="70" Height="28" Margin="5,0,0,0" Click="BtnRefreshMusic_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE72C;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="刷新" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <CheckBox Name="ChkMuteWhenUnfocused" Content="失去焦点时静音"
+                          Margin="0,-4,0,15"
+                          Click="ChkMuteWhenUnfocused_Click"
+                          ToolTip="勾选后：窗口最小化或切换到其它程序时会自动静音背景音乐；取消勾选则保持播放。"/>
+
+                <!-- ★ 背景音乐音量：4 列 Grid（标签 / 图标 / 滑块 / 数值），避免图标偏移 -->
+                <Grid Margin="23,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="背景音乐音量"
+                               VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="1" Name="TxtMuteIcon" Text="&#xE994;"
+                               FontFamily="{StaticResource AppIconFont}"
+                               FontSize="16" VerticalAlignment="Center" Cursor="Hand"
+                               MouseLeftButtonDown="TxtMuteIcon_Click"
+                               Margin="0,0,10,0"/>
+                    <Slider Grid.Column="2" Name="SliderVolume" Width="250"
+                            HorizontalAlignment="Left"
+                            Minimum="0" Maximum="100" Value="50"
+                            Style="{StaticResource CircularSliderStyle}"
+                            IsMoveToPointEnabled="True"
+                            PreviewMouseWheel="SliderVolume_MouseWheel"
+                            ValueChanged="SliderVolume_ValueChanged"/>
+                    <TextBlock Grid.Column="3" Name="TxtVolumeValue" Text="50"
+                               VerticalAlignment="Center" Margin="10,0,0,0"
+                               Width="30" TextAlignment="Left"/>
+                </Grid>
+
+                <!-- ★ 抽卡音效音量：同上 -->
+                <CheckBox Name="ChkSoundEffect" Content="全局抽卡音效" FontSize="13" IsChecked="True"
+                          Margin="0,0,0,10" VerticalAlignment="Center" Click="ChkSoundEffect_Click"/>
+                <Grid Margin="23,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="抽卡音效音量"
+                               VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="1" Name="TxtSoundIcon" Text="&#xE994;"
+                               FontFamily="{StaticResource AppIconFont}"
+                               FontSize="16" VerticalAlignment="Center" Cursor="Hand"
+                               MouseLeftButtonDown="TxtSoundIcon_Click"
+                               ToolTip="点击静音 / 取消静音"
+                               Margin="0,0,10,0"/>
+                    <Slider Grid.Column="2" Name="SliderSoundVolume" Width="250"
+                            HorizontalAlignment="Left"
+                            Minimum="0" Maximum="100" Value="50"
+                            Style="{StaticResource CircularSliderStyle}"
+                            IsMoveToPointEnabled="True"
+                            PreviewMouseWheel="SliderSoundVolume_MouseWheel"
+                            ValueChanged="SliderSoundVolume_ValueChanged"/>
+                    <TextBlock Grid.Column="3" Name="TxtSoundVolumeValue" Text="50"
+                               VerticalAlignment="Center" Margin="10,0,0,0"
+                               Width="30" TextAlignment="Left"/>
+                </Grid>
+
+                <TextBlock Text="历史记录" FontSize="20" FontWeight="Bold" Margin="0,10,0,10" Foreground="{DynamicResource Fg_333333}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                    <Button Width="140" Height="30" Margin="0,0,10,0" Click="OpenHistory_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE72D;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                            <TextBlock Text="打开历史记录" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Name="BtnToggleHistory" Width="140" Height="30" Click="BtnToggleHistory_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Name="BtnToggleHistoryIcon" Text="&#xE70D;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="13" VerticalAlignment="Center"/>
+                            <TextBlock Name="BtnToggleHistoryText" Text="禁用历史记录" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <TextBlock Text="动画" FontSize="20" FontWeight="Bold" Margin="0,10,0,10" Foreground="{DynamicResource Fg_333333}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                    <Button Name="BtnToggleAnimation" Width="140" Height="30" Click="BtnToggleAnimation_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Name="BtnToggleAnimationIcon" Text="&#xE70D;" FontFamily="{StaticResource AppIconFont}"
+                               FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Name="BtnToggleAnimationText" Text="禁用动画" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+            </ScrollViewer>
+
+            <Grid Name="PanelPool" Visibility="Collapsed">
+                <Grid x:Name="PoolContentPanel">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="选择卡池：" VerticalAlignment="Center" Width="100" Foreground="{DynamicResource Fg_333333}"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <ComboBox Name="ComboPools" Width="250" Height="30"
+                                  Style="{StaticResource AppComboBoxStyle}" SelectionChanged="ComboPools_SelectionChanged"/>
+                        <Button Width="85" Height="30" Margin="10,0,0,0" Click="BtnNewPool_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="新建" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Width="85" Height="30" Margin="10,0,0,0" Click="BtnImportPools_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="导入" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="卡池封面：" VerticalAlignment="Top" Width="100" Margin="0,5,0,0" Foreground="{DynamicResource Fg_333333}"/>
+                    <Border Grid.Column="1" Width="250" Height="140" Background="{DynamicResource Bg_FFFFFF}" BorderBrush="{DynamicResource Bd_CCCCCC}" BorderThickness="1"
+                            HorizontalAlignment="Left" MouseLeftButtonDown="Cover_Click">
+                        <Grid>
+                            <Image Name="ImgCover" Stretch="Uniform" Visibility="Collapsed"/>
+                            <MediaElement Name="VidCover" Stretch="Uniform" Visibility="Collapsed"
+                                          LoadedBehavior="Manual" UnloadedBehavior="Manual" IsMuted="True"
+                                          MediaEnded="VidCover_MediaEnded" MediaFailed="VidCover_MediaFailed"/>
+                            <!-- ★ 修复：限制 MaxWidth，确保文字在正方形的 Uniform 图片内部 -->
+                            <TextBlock Name="TxtCoverPlaceholder" Text="点击可选择文件"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       MaxWidth="140" Margin="10"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Row="2" Margin="0,0,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="卡池内容：" VerticalAlignment="Top" Margin="0,4,0,0" Foreground="{DynamicResource Fg_333333}"/>
+                    <Border Grid.Column="1" HorizontalAlignment="Left"
+                            CornerRadius="6" BorderBrush="{DynamicResource Bd_E5E7EB}" BorderThickness="1"
+                            Background="{DynamicResource Bg_FFFFFF}" ClipToBounds="True">
+                        <Grid x:Name="PoolContentClip" SizeChanged="PoolContentClip_SizeChanged">
+                            <DataGrid Name="GridPoolContent"
+                                      Style="{StaticResource AppDataGridStyle}"
+                                      AutoGenerateColumns="True"
+                                      IsReadOnly="True"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      HeadersVisibility="Column"
+                                      ColumnWidth="Auto"
+                                      HorizontalAlignment="Left"
+                                      BorderThickness="0"
+                                      Background="{DynamicResource Bg_FFFFFF}"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto"/>
+                            <Border Width="20" Height="44" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Background="{DynamicResource Bg_F9FAFB}" CornerRadius="0,6,0,0"
+                                    IsHitTestVisible="False"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="管理：" VerticalAlignment="Center" Width="100" Foreground="{DynamicResource Fg_333333}"/>
+                    <Button Name="BtnModifyPool" Width="105" Height="35" Margin="0,0,10,0" Click="BtnModifyPool_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE70F;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                            <TextBlock Text="编辑" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Width="105" Height="35" Margin="0,0,10,0" Click="DeletePool_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74D;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                            <TextBlock Text="删除" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Width="105" Height="35" Click="CopyPool_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8C8;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                            <TextBlock Text="复制" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Width="105" Height="35" Margin="10,0,0,0" Click="BtnExportPools_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                            <TextBlock Text="导出" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                </Grid>
+
+                <StackPanel x:Name="EmptyPoolPanel" Visibility="Collapsed"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="当前未找到任何卡池。" FontSize="20" FontWeight="Bold"
+                           Foreground="{DynamicResource Fg_888888}" HorizontalAlignment="Center"/>
+                    <Button Width="150" Height="38" Margin="0,18,0,0" HorizontalAlignment="Center"
+                            Click="BtnNewPool_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="新建卡池" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Width="150" Height="38" Margin="0,10,0,0" HorizontalAlignment="Center"
+                            Click="BtnImportPools_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="14"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="导入卡池" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+            <ScrollViewer PanningMode="VerticalOnly" Name="PanelSystem" VerticalScrollBarVisibility="Hidden" Visibility="Collapsed" Margin="0" Padding="0,0,24,0"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0">
+                    <TextBlock Text="卡池目录" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}"/>
+                    <ListBox Name="ListDirs" Margin="0,0,0,10" MaxWidth="760" HorizontalAlignment="Left"
+                             Background="Transparent" BorderThickness="0" Padding="0"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                             ItemContainerStyle="{StaticResource PlainListBoxItemStyle}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Height="25"
+                                            Background="{DynamicResource Bg_FFFFFF}" BorderBrush="{DynamicResource Bd_ABADB3}" BorderThickness="1"
+                                            Padding="4,0" Margin="0,0,10,0" SnapsToDevicePixels="True">
+                                        <TextBox Text="{Binding Mode=OneWay}"
+                                                 IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                                 BorderThickness="0" Background="Transparent"
+                                                 VerticalContentAlignment="Center" TextWrapping="NoWrap"
+                                                 HorizontalScrollBarVisibility="Hidden"
+                                                 VerticalScrollBarVisibility="Disabled"
+                                                 Padding="0" Cursor="IBeam"/>
+                                    </Border>
+                                    <Button Grid.Column="1" Width="105" Height="25" Margin="0,0,5,0" Click="OpenSpecificDir_Click" Tag="{Binding}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                            <TextBlock Text="打开文件夹" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="2" Width="75" Height="25" Click="DeleteSpecificDir_Click" Tag="{Binding}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE74D;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                            <TextBlock Text="删除" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Button Width="115" Height="30" HorizontalAlignment="Left" Margin="0,0,0,20" Click="AddDir_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                            <TextBlock Text="添加目录" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        </StackPanel>
+                    </Button>
+
+                    <TextBlock Text="资源目录" FontSize="18" FontWeight="Bold" Margin="0,10,0,10" Foreground="{DynamicResource Fg_333333}"/>
+                    <Grid Margin="0,0,0,20" MaxWidth="760" HorizontalAlignment="Left" x:Name="ResourceDirRow">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Height="25"
+                                Background="{DynamicResource Bg_FFFFFF}" BorderBrush="{DynamicResource Bd_ABADB3}" BorderThickness="1"
+                                Padding="4,0" SnapsToDevicePixels="True">
+                            <TextBox Name="TxtResDir"
+                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                     BorderThickness="0" Background="Transparent"
+                                     VerticalContentAlignment="Center" TextWrapping="NoWrap"
+                                     HorizontalScrollBarVisibility="Hidden"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     Padding="0" Cursor="IBeam"/>
+                        </Border>
+                        <Button Grid.Column="1" Width="105" Height="25" Margin="10,0,0,0" Click="OpenResDir_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="打开文件夹" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="2" Width="115" Height="25" Margin="5,0,0,0" Click="SelectResDir_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="选择文件夹" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <TextBlock Text="截图目录" FontSize="18" FontWeight="Bold" Margin="0,10,0,10" Foreground="{DynamicResource Fg_333333}"/>
+                    <Grid Margin="0,0,0,20" MaxWidth="760" HorizontalAlignment="Left" x:Name="ScreenshotDirRow">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Height="25"
+                                Background="{DynamicResource Bg_FFFFFF}" BorderBrush="{DynamicResource Bd_ABADB3}" BorderThickness="1"
+                                Padding="4,0" SnapsToDevicePixels="True">
+                            <TextBox Name="TxtScreenshotDir"
+                                     IsReadOnly="False"
+                                     BorderThickness="0" Background="Transparent"
+                                     VerticalContentAlignment="Center" TextWrapping="NoWrap"
+                                     HorizontalScrollBarVisibility="Hidden"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     Padding="0" Cursor="IBeam"
+                                     LostFocus="TxtScreenshotDir_LostFocus"
+                                     KeyDown="TxtScreenshotDir_KeyDown"/>
+                        </Border>
+                        <Button Grid.Column="1" Width="105" Height="25" Margin="10,0,0,0" Click="OpenScreenshotDir_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE838;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="打开文件夹" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="2" Width="115" Height="25" Margin="5,0,0,0" Click="SelectScreenshotDir_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="选择文件夹" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <TextBlock Text="性能" FontSize="18" FontWeight="Bold" Margin="0,10,0,10" Foreground="{DynamicResource Fg_333333}"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                        <TextBlock Text="选择视觉呈现模式：" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                        <ComboBox Name="ComboRenderPreference" Width="180" Height="28" Margin="8,0,0,0"
+                                  Style="{StaticResource AppComboBoxStyle}"
+                                  VerticalContentAlignment="Center"
+                                  SelectionChanged="ComboRenderPreference_SelectionChanged">
+                            <ComboBoxItem Content="流畅优先"/>
+                            <ComboBoxItem Content="加载速度优先"/>
+                        </ComboBox>
+                        <Border CornerRadius="12" Padding="6" Margin="2,0,0,0" VerticalAlignment="Center" Cursor="Hand"
+                                ToolTip="查看说明" MouseLeftButtonDown="RenderPreferenceInfo_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="&#xE9CE;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="14" VerticalAlignment="Center" Foreground="{DynamicResource Fg_888888}"/>
+                        </Border>
+                    </StackPanel>
+
+                    <TextBlock Text="存储" FontSize="18" FontWeight="Bold" Margin="0,10,0,10" Foreground="{DynamicResource Fg_333333}"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Width="115" Height="30" Margin="0,0,10,0" Click="ResetApp_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE777;" FontFamily="{StaticResource AppIconFont}" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="重置应用" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Width="115" Height="30" Click="ClearCache_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" FontFamily="{StaticResource AppIconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource Fg_333333}"/>
+                                <TextBlock Text="清理缓存" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <StackPanel Name="PanelHideSection">
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,10">
+                            <TextBlock Text="功能隐藏" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                            <Border CornerRadius="12" Padding="6" Margin="2,0,0,0" VerticalAlignment="Center" Cursor="Hand"
+                                    ToolTip="查看说明" MouseLeftButtonDown="HideSectionInfo_Click">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource Ui.HoverSoft}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="&#xE9CE;" FontFamily="{StaticResource AppIconFont}"
+                                           FontSize="14" VerticalAlignment="Center" Foreground="{DynamicResource Fg_888888}"/>
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,20">
+                            <CheckBox Name="ChkHideProbability" Content="隐藏「基于概率的抽取」复选框"
+                                      Margin="0,3" Click="ChkHideProbability_Click"/>
+                            <CheckBox Name="ChkHideAdvanced" Content="隐藏「高级抽卡规则」"
+                                      Margin="0,3" Click="ChkHideAdvanced_Click"/>
+                            <CheckBox Name="ChkHideEditPool" Content="隐藏「编辑卡池」"
+                                      Margin="0,3" Click="ChkHideEditPool_Click"/>
+                            <CheckBox Name="ChkHideGachaReport" Content="隐藏「查看抽取报告」"
+                                      Margin="0,3" Click="ChkHideGachaReport_Click"/>
+
+                            <CheckBox Name="ChkHideOptionSection" Content="隐藏「功能隐藏」本身"
+                                      Margin="0,3" Click="ChkHideOptionSection_Click"/>
+
+                        </StackPanel>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+
+
+            <Grid Name="PanelHelp" Grid.Column="1" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 固定头部：标题与搜索框始终置顶 -->
+                <Grid Grid.Row="0" Margin="0,0,24,6">
+                    <TextBlock Text="使用帮助" FontSize="24" FontWeight="Bold" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Fg_333333}"/>
+                    <!-- 收起动画层：按钮条先搬到这里，搜索框从它上面滑过，避免出现重叠残影 -->
+                    <Canvas x:Name="HelpAnimLayer" Panel.ZIndex="0" IsHitTestVisible="False"/>
+
+                    <StackPanel x:Name="HelpSearchPanel" Orientation="Horizontal"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- 搜索框与「未找到任何结果」作为一列：提示文字居中在搜索框正下方 -->
+                        <StackPanel Width="220" Orientation="Vertical">
+                            <local:SearchBox x:Name="HelpSearch" Width="220"
+                                             SearchChanged="HelpSearch_SearchChanged"/>
+                            <StackPanel x:Name="HelpNoResult" Orientation="Horizontal" HorizontalAlignment="Center"
+                                        Margin="0,4,0,0" Visibility="Collapsed">
+                                <TextBlock x:Name="TxtHelpNoResultIcon" Text="&#xE783;" FontFamily="{StaticResource AppIconFont}" FontSize="12"
+                                           VerticalAlignment="Center" Margin="0,0,4,0"
+                                           Foreground="{DynamicResource Fg_D32F2F}"/>
+                                <TextBlock Text="未找到任何结果" FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_D32F2F}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel x:Name="HelpMatchBar" Orientation="Horizontal" Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                            <Button x:Name="BtnHelpPrev" Width="30" Height="28" Padding="0" Margin="0,0,6,0"
+                                    Click="HelpPrev_Click" ToolTip="上一个搜索结果">
+                                <TextBlock Text="&#xE76B;" FontFamily="{StaticResource AppIconFont}" FontSize="12"/>
+                            </Button>
+                            <Button x:Name="BtnHelpNext" Width="30" Height="28" Padding="0"
+                                    Click="HelpNext_Click" ToolTip="下一个搜索结果">
+                                <TextBlock Text="&#xE76C;" FontFamily="{StaticResource AppIconFont}" FontSize="12"/>
+                            </Button>
+                            <TextBlock x:Name="TxtHelpMatch" VerticalAlignment="Center" Margin="8,0,0,0"
+                                       FontSize="12" Foreground="{DynamicResource Fg_666666}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" PanningMode="VerticalOnly" Name="HelpScroll"
+                              VerticalScrollBarVisibility="Hidden" Margin="0" Padding="0,0,24,0"
+                              HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,0,20">
+
+                    <TextBlock Text="快速导航" FontSize="13" FontWeight="SemiBold" Margin="0,4,0,8"
+                               Foreground="{DynamicResource Fg_666666}"/>
+
+                    <WrapPanel Name="HelpToc" Margin="0,0,0,14">
+                        <Button Content="第一次使用" Tag="SecFirstUse" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="管理卡池" Tag="SecPool" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="抽取与结果" Tag="SecDraw" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="抽取报告" Tag="SecReport" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="个性化" Tag="SecPersonalization" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="高级抽卡规则" Tag="SecAdvanced" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="按概率抽取" Tag="HelpProbabilityDraw" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="编辑卡池" Tag="HelpPoolEdit" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="功能隐藏" Tag="SecHide" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="设置" Tag="SecSettings" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="常见问题" Tag="SecFaq" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                        <Button Content="数据与备份" Tag="SecData" Style="{StaticResource HelpTocButtonStyle}" Click="HelpToc_Click"/>
+                    </WrapPanel>
+
+
+                    <TextBlock Text="第一次使用" x:Name="SecFirstUse" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        还没有卡池时，主界面中央会出现「新建卡池」「导入卡池」两个按钮，点击任意一个即可开始。程序启动时不会自动创建卡池目录，点击「创建」后才会生成。<LineBreak/>
+                        1. 确认卡池文件夹位于程序可扫描的目录中（默认为程序目录下的 <Run FontFamily="Consolas" Background="{DynamicResource Bg_EEEEEE}">SelectBox</Run>，每个子文件夹视为一个卡池）。<LineBreak/>
+                        2. 打开程序，左侧列表会列出所有卡池，点一下就能选中；也可以按键盘 ↑ / ↓ 切换。<LineBreak/>
+                        3. 点右下角「1 次抽取」或「多次抽取」开始抽，结果显示在结果页。<LineBreak/>
+                        4. 抽完返回主界面可以继续抽，历史记录会自动保存。
+                    </TextBlock>
+
+                    <TextBlock Text="管理卡池" x:Name="SecPool" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold">新建</Run>：主界面中间的灰色区域点一下，或「选项 → 卡池 → 新建」。<LineBreak/>
+                        <Run FontWeight="Bold">填写内容</Run>：每行一个对象，第一行是表头；第一列是对象名（不能重复），后面的列可以写分类、星级等，随意。<LineBreak/>
+                        <Run FontWeight="Bold">封面</Run>：点封面框选择图片或视频，想换就再点一次；也可以删除封面。<LineBreak/>
+                        <Run FontWeight="Bold">编辑</Run>：可以改名、换保存位置、改内容；改名或换位置会连带整个卡池文件夹一起处理。<LineBreak/>
+                        <Run FontWeight="Bold">复制 / 删除</Run>：复制等于把整个卡池（含封面、历史、保底）复制一份；加密卡池复制后仍然是加密的，用原密码即可打开。删除会移除整个文件夹，无法恢复，不需要密码。<LineBreak/>
+                        <Run FontWeight="Bold">锁定</Run>：可以给卡池设密码，还能选填密保问题；锁定后「编辑名单」「重命名」「复制」「导出」需要先验证密码；「更换封面」「删除」不需要密码。<LineBreak/>
+                        <Run FontWeight="Bold">忘记密码</Run>：在验证密码窗口点「忘记密码」，通过密保答案（如已设置）即可重置密码，不需要额外跳转。<LineBreak/>
+                        <Run FontWeight="Bold">导入 / 导出</Run>：导出可把选中的卡池打包成一个 zip 用于备份或分享（勾选了加密卡池时会先要求输入密码，导出得到的是解密后的卡池，压缩包里是明文名单）；导入支持把 zip 拖进窗口或手动选择，确认后才会真正导入，导入过程有进度提示，无法识别的文件会最后统一提示。
+
+                        <Run FontWeight="Bold">右键菜单</Run>：在左侧卡池列表上右键，可以「浏览文件夹(B)」「导出(G)」「编辑卡池信息(E)」「重命名(M)」「调整封面(C)」「查看历史记录(H)」「删除(D)」，括号内字母为快捷键；在主界面封面区域右键也可以打开同一菜单。<LineBreak/>
+                        <Run FontWeight="Bold">导出 / 导入</Run>：右键「导出(G)」和列表空白处右键「导入(F)」打开的就是「选项 → 卡池」里的那两个弹窗——导出可以多选卡池、加密卡池需先验证密码，导入支持拖拽文件、有进度提示。<LineBreak/>
+                        <Run FontWeight="Bold">调整封面</Run>：选择图片 / GIF / 视频后会先弹出预览窗口，点「立即修改」才生效，这一步不需要密码。<LineBreak/>
+                        <Run FontWeight="Bold">外部改动</Run>：在资源管理器里新增或删除卡池文件夹，程序会自动同步列表，不会占用文件夹，随时可以外置管理；在任意页面做出的修改（新建、改名、解锁、删除）也会立即同步到其它页面。
+                    </TextBlock>
+
+                    <TextBlock Text="抽取与结果" x:Name="SecDraw" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold">1 次抽取</Run>：随机抽 1 个，结果以大号文字展示。<LineBreak/>
+                        <Run FontWeight="Bold">多次抽取</Run>：输入 1~9999 次，结果以卡片或列表展示，可以重抽；次数少于 500 时不会出现加载动画，直接出结果。<LineBreak/>
+                        <Run FontWeight="Bold">不重复抽取</Run>：勾选后已经抽过的对象不会再出现；抽空时会提示是否重置抽取记录。<LineBreak/>
+                        <Run FontWeight="Bold">重置</Run>：清空「不重复抽取」的记录，并把当前卡池的保底状态恢复初始。<LineBreak/>
+                        <Run FontWeight="Bold">历史记录</Run>：按卡池查看每次抽取结果，可以用 ← / → 翻页；右上角搜索框只筛选当前页，分页查看不会跨页搜索。<LineBreak/>
+                        <Run FontWeight="Bold">本次抽取详情</Run>：勾选「不重复抽取」后，底部会出现该入口，可展开查看已抽取 / 未抽取的对象列表。<LineBreak/>
+                        <Run FontWeight="Bold">结果排版</Run>：列表会按可用空间自动缩放，表头固定在顶部，内容过多时在框内滚动。<LineBreak/>
+                        <Run FontWeight="Bold">按卡池记忆</Run>：「不重复抽取」「抽取动画」的勾选状态按卡池分别保存，切换卡池或重启后自动恢复，互不影响。<LineBreak/>
+                        如果卡池是空的、或没有选中卡池，点抽取会提示先选择一个有内容的卡池。
+                    </TextBlock>
+
+                    <StackPanel x:Name="HelpChapterReport">
+                        <TextBlock Text="抽取报告与分享" x:Name="SecReport" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                        <TextBlock x:Name="HelpReportCommon" TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                            <Run FontWeight="Bold">查看报告</Run>：主界面右下角「查看抽取报告」，或在历史记录页点「查看抽取报告」。<LineBreak/>
+                            <Run FontWeight="Bold">分享长图</Run>：点击「分享」生成长图并保存到图片文件夹；点「打开文件夹」可以定位文件，点「复制到剪贴板」复制的是 jpg 文件本身，可直接粘贴到文件夹或聊天窗口。<LineBreak/>
+                            <Run FontWeight="Bold">生成过程中</Run>：会先显示进度条，期间报告页的动画照常播放，进度条持续更新，界面仍可以正常响应。<LineBreak/>
+                            <Run FontWeight="Bold">报告很长时</Run>：会先问「是否转换为生成PDF或拆分为多张图片生成」。生成PDF会把整份报告保存成一个多页 PDF，生成后同样可以直接预览、逐页翻看；拆分则每张单独保存，可以逐张预览、逐张复制。<LineBreak/>
+                            <Run FontWeight="Bold">多张长图</Run>：每张左上角标注「随机抽取器 版本 卡池：卡池名 第X张/共N张 生成时间」，方便按顺序查看；缩略图可以用鼠标滚轮左右翻。<LineBreak/>
+                            <Run FontWeight="Bold">预览图</Run>：右键可以「复制（C）」当前这张，或「使用系统图片查看器打开（O）」；右键缩略图会先切到那一张。<LineBreak/>
+                            <Run FontWeight="Bold">缓存</Run>：历史记录没有变化时会复用上次生成的图片或 PDF，不会重复生成；文件缺失或损坏会自动重新生成，有新的抽取记录后也会自动更新。<LineBreak/>
+                            <Run FontWeight="Bold">对象名</Run>：按名单表头识别「抽取对象」列，序号放在第一列也不会把名字显示成数字。<LineBreak/>
+                            <Run FontWeight="Bold">数据不足</Run>：没有记录或样本不足时不会显示分享按钮和「报告仅供娱乐」。
+                        </TextBlock>
+                        <TextBlock x:Name="HelpReportNormal" TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,10,0,0" Foreground="{DynamicResource Fg_333333}">
+                            <Run FontWeight="Bold">普通卡池</Run>：只统计每个对象被抽到的次数，有头像时显示头像；不包含「歪」标记和出金进度条。
+                        </TextBlock>
+                        <TextBlock x:Name="HelpReportAdvanced" TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,10,0,0" Foreground="{DynamicResource Fg_333333}">
+                            <Run FontWeight="Bold">高级规则卡池</Run>：展示整体评价、出金/出三星记录和每个人的抽数；「？？？」表示距离上次出金的已垫抽数。<LineBreak/>
+                            · <Run FontWeight="Bold">「歪」标记</Run>：没有抽到 UP 的五星/三星会标记「歪」；蔚蓝档案（旧）庆典招募只有主 UP 不歪。<LineBreak/>
+                            · <Run FontWeight="Bold">排序</Run>：最新记录在最上方，已垫抽数固定在最前。
+                        </TextBlock>
+                    </StackPanel>
+
+                    <TextBlock Text="个性化（头像、立绘、颜色、背景、音效、动画）" x:Name="SecPersonalization" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        入口：卡池编辑页右上角的「个性化抽取对象」。<LineBreak/>
+                        · <Run FontWeight="Bold">头像 / 立绘</Run>：点「选择头像」「选择立绘」，保存时会自动复制进该卡池文件夹，换电脑时带上整个卡池即可。<LineBreak/>
+                        · <Run FontWeight="Bold">颜色</Run>：点「调整颜色」选一个颜色，该对象名在抽取结果里就会按这个颜色显示。<LineBreak/>
+                        · <Run FontWeight="Bold">背景</Run>：可选「默认（跟随主题）」「纯色」（支持自定义）或「图片」。<LineBreak/>
+                        · <Run FontWeight="Bold">抽卡音效</Run>：无 / 全局共用 / 每个对象单独。<LineBreak/>
+                        · <Run FontWeight="Bold">动画</Run>：卡池里至少有一个对象设置了头像或立绘才能设置；下拉框右侧的「?」按钮可以查看动画说明，选好后点「效果预览 → 播放」可以看效果。<LineBreak/>
+                        · <Run FontWeight="Bold">列表操作</Run>：列宽可以拖动表头分隔线调整，表格底部有横向滚动条；名称过长会自动换行，右侧滚动条可以拖动查看后面的对象。<LineBreak/>
+                        · <Run FontWeight="Bold">右侧预览</Run>：没选对象时显示提示；对象没有头像或立绘时，只显示居中的文字。
+                    </TextBlock>
+
+                    <TextBlock Text="外观与设置" x:Name="SecSettings" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold">选项 → 常规</Run>：主题（跟随系统 / 浅色 / 深色）、右键菜单样式（现代 / 经典）、背景音乐、音量、静音、全局抽卡音效、历史记录开关、动画开关（关闭后页面切换、行内斜纹、抽取报告里的头像 GIF 都会停止）。<LineBreak/>
+                        <Run FontWeight="Bold">选项 → 卡池</Run>：选择、新建、编辑、删除、复制卡池。<LineBreak/>
+                        <Run FontWeight="Bold">选项 → 系统</Run>：卡池列表目录（可以加多个）、资源目录、截图目录、性能（视觉呈现模式：流畅优先 / 加载速度优先）、功能隐藏、清理缓存、重置应用。<LineBreak/>
+                        <Run FontWeight="Bold">截图目录</Run>：抽取报告长图的保存位置，可直接编辑路径，或点击「选择文件夹」修改。<LineBreak/>
+                        <Run FontWeight="Bold">右键菜单</Run>：默认使用现代样式；如果更喜欢旧版外观，可在「选项 → 常规 → 外观」中切换为「经典」。<LineBreak/>
+                        <Run FontWeight="Bold">窗口标题</Run>：在「选项 → 常规 → 外观 → 窗口标题」里输入文字，窗口标题栏就显示这段文字；留空则用默认标题「随机抽取器」。标题里可以带参数，显示时自动替换：{version} 软件版本、{time} 当前时间、{date} 当前日期、{pool} 当前卡池（只在主界面生效）、{page} 当前页面标题。自定义标题将在去除参数后写入拆分分享长图或分享PDF；没填标题时那里显示「随机抽取器 版本号」。输入回车、换行、制表符这类不可见字符时输入框会变红并提示不可用符号。鼠标停在输入框上会显示这份说明。<LineBreak/>
+                        <Run FontWeight="Bold">背景音乐</Run>：可以设置「失去焦点时静音」，窗口最小化或切换到其它程序时自动静音；取消勾选则保持播放。<LineBreak/>
+                        <Run FontWeight="Bold">导入音乐</Run>：先选择音频文件，再选择保存位置；取消任一步都不会创建资源文件夹。资源目录支持子文件夹，点「刷新」会重新扫描并同步音频列表。<LineBreak/>
+                        <Run FontWeight="Bold">音频文件丢失</Run>：程序启动时会检查上次选择的背景音乐；文件不存在会提示重新选择。<LineBreak/>
+                        <Run FontWeight="Bold">选项 → 关于</Run>：版本号、更新日志、反馈邮箱。<LineBreak/>
+                        设置会自动保存，下次打开继续生效；配置文件在 <Run FontFamily="Consolas" Background="{DynamicResource Bg_EEEEEE}">%APPDATA%\Random Select</Run>。
+                    </TextBlock>
+
+                    <StackPanel x:Name="HelpChapterAdvanced">
+                        <TextBlock Text="高级抽卡规则（可选）" x:Name="SecAdvanced" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                            · 在卡池编辑页勾选「高级抽卡规则」后，可以设置分类权重、保底、UP 等更细的抽取方式。<LineBreak/>
+                            · 启用后「不重复抽取」会被锁定关闭，这是正常现象。<LineBreak/>
+                            · 星穹铁道规则的「跃迁类型」有三种：角色活动跃迁（5 星角色，UP 占 50%）、光锥活动跃迁（5 星光锥，UP 占 75%，4 星是角色或光锥）、群星跃迁（常驻，没有 UP，按基础概率出）。<LineBreak/>
+                            · 光锥 / 群星跃迁的「5 星分类」「4 星分类」可以一次选多个分类（下拉框里带逗号的那一项，例如「4星角色,4星光锥」），分类之间用逗号分隔。<LineBreak/>
+                            · 星穹铁道规则里的「3 星概率」会自动计算（角色/光锥 = 100% 减去四项；群星 = 100% 减去五星、四星），不用手填，也不会出现改了不生效的情况。<LineBreak/>
+                            · 如果改动了卡池内容导致规则不再适用，会提示是否重置规则。<LineBreak/>
+                            · 选择角色 / 学生时，右上角搜索框直接显示，输入后 0.5 秒或按回车自动搜索；庆典主UP、次UP会同步筛选并互相隐藏已选项，UP 下拉框会打开带搜索的独立选择界面。
+                        </TextBlock>
+                    </StackPanel>
+
+                    <TextBlock x:Name="HelpProbabilityDraw" TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,25,0,0">
+                        <Run FontWeight="Bold" FontSize="18" Foreground="{DynamicResource Fg_0078D7}">按概率抽取</Run><LineBreak/>
+                        · 勾选「基于不同概率的抽取」后，表头会多出「概率」列，每一行的概率加起来要是 1（或 100%）。<LineBreak/>
+                        · 概率填了大于 0 的对象按概率抽；概率填 0 或留空的对象不会被抽到；所有对象都没填概率时才按平均抽。
+                    </TextBlock>
+
+                    <TextBlock x:Name="HelpPoolEdit" TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,25,0,0">
+                        <Run FontWeight="Bold" FontSize="18" Foreground="{DynamicResource Fg_0078D7}">编辑卡池</Run><LineBreak/>
+                        · 可以改名、换保存位置、修改内容；改名或换位置会自动处理整个卡池文件夹（跨盘时会先复制再删除）。<LineBreak/>
+                        · 卡池启用了高级规则时，若内容里的分类或对象被改动，会提示规则失效并可一键重置。
+                    </TextBlock>
+
+                    <StackPanel x:Name="HelpChapterHide">
+                        <TextBlock Text="功能隐藏（F12）" x:Name="SecHide" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                            · 入口：「选项 → 系统 → 功能隐藏」。<LineBreak/>
+                            · 可以隐藏「基于概率的抽取」「高级抽卡规则」「编辑卡池」以及「功能隐藏本身」。<LineBreak/>
+                            · 隐藏后，在<Run FontWeight="Bold">任意界面</Run>按 F12 可临时显示 / 隐藏这些功能；重启后恢复隐藏状态。<LineBreak/>
+                            · 如果连「功能隐藏」本身也被隐藏了，只能靠 F12 临时把它调出来。
+                        </TextBlock>
+                    </StackPanel>
+
+                    <TextBlock Text="遇到问题怎么办" x:Name="SecFaq" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">左侧看不到卡池？</Run><LineBreak/>
+                        · 程序启动时不会自动创建卡池目录；先点「新建卡池」并点击「创建」，或确认卡池文件夹已在扫描目录中。<LineBreak/>
+                        · 打开「选项 → 系统」，看看「卡池列表目录」里有没有包含卡池所在的文件夹，没有就点「添加目录」。<LineBreak/>
+                        · 一个卡池就是一个文件夹，里面要有内容文件（data.txt / data.zip / data.lock 之一）。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">抽卡没有声音？</Run><LineBreak/>
+                        · 检查「选项 → 常规」：背景音乐有没有开启、音量是不是 0、喇叭图标是不是静音状态。<LineBreak/>
+                        · 资源目录不存在时不会再自动创建；点「导入音乐」先选音频、再选保存位置即可创建并导入。<LineBreak/>
+                        · 换了音频或手动放进资源文件夹后，点「刷新」重新扫描并同步列表。<LineBreak/>
+                        · 想听抽卡音效，除了打开「全局抽卡音效」，还要在个性化里选择音效来源。<LineBreak/>
+                        · 音频文件被移动或删除后也会没声音，重新选择一次即可。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">抽卡没有动画？</Run><LineBreak/>
+                        · 动画需要卡池里至少有一个对象设置了头像或立绘，到「个性化抽取对象」里添加即可。<LineBreak/>
+                        · 再确认「选项 → 常规」里没有开启「禁用动画」。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">「动画」下拉框点不动？</Run><LineBreak/>
+                        · 说明整个卡池还没有任何对象设置头像或立绘；先添加一个，或点下拉框右侧的「?」帮助按钮查看说明。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">忘记卡池密码？</Run><LineBreak/>
+                        · 在验证密码的窗口点「忘记密码」，答对密保问题就能重置密码（删除卡池本来就不需要密码）。<LineBreak/>
+                        · 密码和密保都忘了，只能手动删除该卡池的文件夹。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">选项里某些功能不见了？</Run><LineBreak/>
+                        · 可能是开了「功能隐藏」，在任意界面按 F12 可以临时把隐藏的功能显示出来。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">提示「配置读写失败」？</Run><LineBreak/>
+                        · 说明程序没有权限写 <Run FontFamily="Consolas" Background="{DynamicResource Bg_EEEEEE}">%APPDATA%\Random Select</Run>。<LineBreak/>
+                        · 检查该文件夹是否被设为只读，或把本程序加入杀毒软件 / 安全软件的白名单后重试。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">深色模式下有文字看不清？</Run><LineBreak/>
+                        · 在「选项 → 常规 → 主题」切换成浅色或跟随系统；如果仍有看不清的地方，请通过「关于」里的方式反馈。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">新建卡池提示目录不可写？</Run><LineBreak/>
+                        · 程序启动时不会自动创建目录；点击「创建」时会尝试创建保存位置。请换一个用户目录（例如「文档」），或到「选项 → 系统」重新选择卡池目录 / 资源目录。
+                    </TextBlock>
+
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,0,0,10" Foreground="{DynamicResource Fg_333333}">
+                        <Run FontWeight="Bold" Foreground="{DynamicResource Fg_D32F2F}">重置应用会删除卡池吗？</Run><LineBreak/>
+                        · 不会。只清除全局设置，卡池数据、封面、历史记录、个性化资源都会保留。
+                    </TextBlock>
+
+                    <TextBlock Text="键盘快捷键" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        · 主界面：↑ / ↓ 切换卡池，ESC 退出程序。<LineBreak/>
+                        · 任意界面：F12 临时显示 / 隐藏被隐藏的功能。<LineBreak/>
+                        · 历史记录：← / → 翻页。<LineBreak/>
+                        · 对话框：Enter 确定，ESC 取消。
+                    </TextBlock>
+
+                    <TextBlock Text="数据位置与备份" x:Name="SecData" FontSize="18" FontWeight="Bold" Margin="0,25,0,10" Foreground="{DynamicResource Fg_0078D7}"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Foreground="{DynamicResource Fg_333333}">
+                        · <Run FontWeight="Bold">卡池数据</Run>：都在各自的卡池文件夹里，包括内容、封面、历史记录和个性化资源。<LineBreak/>
+                        · <Run FontWeight="Bold">全局设置</Run>：<Run FontFamily="Consolas" Background="{DynamicResource Bg_EEEEEE}">%APPDATA%\Random Select\settings.ini</Run>。<LineBreak/>
+                        · <Run FontWeight="Bold">运行日志</Run>：<Run FontFamily="Consolas" Background="{DynamicResource Bg_EEEEEE}">%APPDATA%\Random Select\logs</Run>，每次启动生成一个 log 文件；遇到报错时可以到这里查看。<LineBreak/>
+                        · <Run FontWeight="Bold">清理缓存</Run>：在「选项 → 系统」中可选择清理运行日志或抽取报告缓存；不会删除卡池、历史记录和已保存的图片。<LineBreak/>
+                        · <Run FontWeight="Bold">备份</Run>：直接复制整个卡池文件夹即可；也可以用「导出」打包成 zip（加密卡池导出前需要输入密码，导出后是明文）。
+                    </TextBlock>
+
+                    <Border Height="20"/>
+                </StackPanel></ScrollViewer>
+            </Grid>
+
+            <StackPanel Name="PanelAbout" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,30">
+                    <Image Width="120" Height="120" Stretch="Uniform" Source="pack://application:,,,/Assets/ico.png"
+                           MouseLeftButtonDown="AboutIcon_Click"/>
+                    <TextBlock Text="随机抽取器" FontSize="40" FontWeight="Bold" Margin="30,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Fg_333333}"/>
+                </StackPanel>
+
+                <StackPanel HorizontalAlignment="Center" Margin="0,0,0,20" MaxWidth="520">
+                    <TextBlock x:Name="TxtAiNote" Text="本软件完全采用人工智能开发，可能存在部分问题。"
+                               FontSize="14" Foreground="{DynamicResource Fg_666666}"
+                               TextAlignment="Left" HorizontalAlignment="Left"
+                               TextWrapping="Wrap"
+                               MouseLeftButtonDown="AiNote_Click"
+                               Margin="0,0,0,14">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="TextDecorations" Value="Underline"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"
+                                VerticalAlignment="Center" Margin="0,0,0,12">
+                        <TextBlock Text="开发者：冰原雪奈" FontSize="18"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="DeepSeek" FontSize="18" VerticalAlignment="Center"
+                                   Margin="10,0,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"
+                                VerticalAlignment="Center" Margin="0,0,0,10">
+                        <TextBlock Text="版本：" FontSize="18" VerticalAlignment="Center"/>
+                        <TextBlock Name="TxtVersion" Text="2.28.0" FontSize="18"
+                                   VerticalAlignment="Center"/>
+                        <Button Name="BtnChangelog" AutomationProperties.Name="更新日志"
+                                Height="28" Padding="12,0" Margin="14,0,0,0"
+                                VerticalAlignment="Center" Click="BtnChangelog_Click"
+                                ToolTip="查看各版本的更新内容">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="&#xE81C;" FontFamily="{StaticResource AppIconFont}"
+                                           FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="更新日志" FontSize="13" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_333333}"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="反馈邮箱：" FontSize="18" VerticalAlignment="Center"/>
+                        <TextBlock Text="ssssssss888777@163.com" FontSize="18"
+                                   VerticalAlignment="Center"/>
+                        <Button Padding="9,5" Margin="4,0,0,0"
+                                VerticalAlignment="Center" Cursor="Hand"
+                                ToolTip="复制邮箱地址"
+                                AutomationProperties.Name="复制邮箱地址"
+                                Click="CopyMail_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="14"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background"
+                                                    Value="{DynamicResource Ui.HoverSoft}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <TextBlock Text="&#xE8C8;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="16" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Fg_666666}"/>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+        <!-- 整高贴边滚动条：贯穿整个窗口右边界 -->
+        <ScrollBar x:Name="EdgeScrollBar" Grid.ColumnSpan="2" Orientation="Vertical"
+                   Panel.ZIndex="30"
+                   HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                   Visibility="Collapsed"/>
+    </Grid>
+</UserControl>

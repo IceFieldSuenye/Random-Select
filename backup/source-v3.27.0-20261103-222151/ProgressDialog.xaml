@@ -1,0 +1,15 @@
+﻿<local:FloatingDialogBase x:Class="RandomDrawer.ProgressDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RandomDrawer"
+        Title="请稍候" DialogWidth="420">
+    <Grid Margin="22,16,22,20" MinWidth="360">
+        <StackPanel>
+            <TextBlock Name="TxtStatus" Text="正在处理…" FontSize="14"
+                       TextWrapping="Wrap" Margin="0,0,0,12"/>
+            <ProgressBar Name="Bar" Height="8" Minimum="0" Maximum="100" Value="0"/>
+            <TextBlock Name="TxtDetail" FontSize="12" Foreground="{DynamicResource Fg_888888}"
+                       Margin="0,8,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+    </Grid>
+</local:FloatingDialogBase>
