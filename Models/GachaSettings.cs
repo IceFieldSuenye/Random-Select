@@ -47,6 +47,12 @@ namespace RandomDrawer
         public double BASubUp3StarProb { get; set; } = 0.003;
         public double BAUp2StarProb { get; set; } = 0.03;
 
+        // ★ 3.76：蔚蓝档案（新）的「招募积分」保底抽数。
+        //   小保底：积分满这么多点必得 3 星学生；大保底：必得 UP 3 星学生。
+        //   抽出 UP 3 星后积分清零重算；只有「蔚蓝档案（新）」会用到。
+        public int BASmallPity { get; set; } = 100;
+        public int BABigPity { get; set; } = 200;
+
         public bool EnableHighlightColorsBA { get; set; } = false;
 
         // ================================================================
@@ -99,6 +105,9 @@ namespace RandomDrawer
                 settings.BAUp3StarProb = ParseDouble(IniHelper.ReadValue("GachaBA", "Up3StarProb", "0.007", path), 0.007);
                 settings.BASubUp3StarProb = ParseDouble(IniHelper.ReadValue("GachaBA", "SubUp3StarProb", "0.003", path), 0.003);
                 settings.BAUp2StarProb = ParseDouble(IniHelper.ReadValue("GachaBA", "Up2StarProb", "0.03", path), 0.03);
+                settings.BASmallPity = ParseInt(IniHelper.ReadValue("GachaBA", "SmallPity", "100", path), 100);
+                settings.BABigPity = ParseInt(IniHelper.ReadValue("GachaBA", "BigPity", "200", path), 200);
+                NormalizeBAPity(settings);
 
                 settings.EnableHighlightColorsBA = IniHelper.ReadValue("GachaBA", "EnableHighlightColors", "0", path) == "1";
 
@@ -121,6 +130,7 @@ namespace RandomDrawer
         public static void SaveSettingsToFile(GachaSettings settings, string path)
         {
             if (settings == null || string.IsNullOrEmpty(path)) return;
+            NormalizeBAPity(settings);
             try
             {
                 IniHelper.WriteValue("Gacha", "Enabled", settings.Enabled ? "1" : "0", path);
@@ -155,6 +165,8 @@ namespace RandomDrawer
                 IniHelper.WriteValue("GachaBA", "Up3StarProb", Fmt(settings.BAUp3StarProb), path);
                 IniHelper.WriteValue("GachaBA", "SubUp3StarProb", Fmt(settings.BASubUp3StarProb), path);
                 IniHelper.WriteValue("GachaBA", "Up2StarProb", Fmt(settings.BAUp2StarProb), path);
+                IniHelper.WriteValue("GachaBA", "SmallPity", settings.BASmallPity.ToString(), path);
+                IniHelper.WriteValue("GachaBA", "BigPity", settings.BABigPity.ToString(), path);
                 IniHelper.WriteValue("GachaBA", "EnableHighlightColors", settings.EnableHighlightColorsBA ? "1" : "0", path);
             }
             catch { }
@@ -164,6 +176,18 @@ namespace RandomDrawer
         // 数值解析 / 格式化：一律按不变文化处理，
         // 避免「小数点用逗号」的系统区域把 0.300 解析成 0（概率静默归零）。
         // ================================================================
+
+        /// <summary>
+        /// 蔚蓝档案（新）：小保底必须小于大保底；数值非法时回到 100 / 200。
+        /// 页面保存时也会再校验一次，这里只是读 ini 的兜底。
+        /// </summary>
+        private static void NormalizeBAPity(GachaSettings settings)
+        {
+            if (settings.BASmallPity < 1 || settings.BASmallPity > 9999) settings.BASmallPity = 100;
+            if (settings.BABigPity < 2 || settings.BABigPity > 9999) settings.BABigPity = 200;
+            if (settings.BABigPity <= settings.BASmallPity)
+                settings.BABigPity = Math.Min(9999, settings.BASmallPity + 1);
+        }
 
         private static double ParseDouble(string text, double fallback)
         {

@@ -121,6 +121,23 @@ namespace RandomDrawer
         public static bool MuteMusicOnCoverAudio = true;
 
         /// <summary>
+        /// 是否播放封面视频自带的音频（选项 → 常规 → 声音 → 视频封面音频）。
+        /// 3.76.10：默认关闭——多轮调试后「封面视频音频」判定为实验性功能，未开启实验性功能时一律不播放。
+        /// </summary>
+        public static bool CoverVideoAudio = false;
+
+        /// <summary>
+        /// 3.76.10：实验性功能「启用封面为视频的自带音频」（选项 → 系统 → 实验性功能，默认关闭）。
+        /// 未开启时：不播放封面视频自带的音频，选项里的两个音频开关隐藏。
+        /// </summary>
+        public static bool ExperimentalCoverAudio = false;
+
+        /// <summary>
+        /// 3.76.10：编辑封面保存带音频的视频时，「保存后不会采用其音频」的提示是否已被用户勾选「不再提示」。
+        /// </summary>
+        public static bool CoverAudioNoticeDismissed = false;
+
+        /// <summary>
         /// 是否显示欢迎页：首次运行（找不到配置文件）或用户在「选项 → 系统」里打开了「启动时显示欢迎页」。
         /// 欢迎页点「开始使用」后会自动关掉。
         /// </summary>
@@ -698,6 +715,11 @@ namespace RandomDrawer
 
                 // 卡池音频：封面视频有声音时是否静音背景音乐
                 MuteMusicOnCoverAudio = IniHelper.ReadBool("Music", "MuteMusicOnCoverAudio", true, SettingsFile);
+                // 3.76.10：「封面视频音频」默认关闭，只有开启实验性功能后才可能为 true
+                ExperimentalCoverAudio = IniHelper.ReadBool("Experimental", "CoverVideoAudio", false, SettingsFile);
+                CoverAudioNoticeDismissed = IniHelper.ReadBool("UI", "CoverAudioNoticeDismissed", false, SettingsFile);
+                CoverVideoAudio = ExperimentalCoverAudio
+                    && IniHelper.ReadBool("Music", "CoverVideoAudio", false, SettingsFile);
 
                 // ★ 功能隐藏
                 HideProbabilityOption = IniHelper.ReadBool("UI", "HideProbabilityOption", false, SettingsFile);
@@ -881,6 +903,9 @@ namespace RandomDrawer
                 IniHelper.WriteValue("Music", "SoundEffectVolume", ((int)(SoundEffectVolume * 100)).ToString(), SettingsFile);
                 IniHelper.WriteBool("Music", "SoundEffectMuted", IsSoundEffectMuted, SettingsFile);
                 IniHelper.WriteBool("Music", "MuteMusicOnCoverAudio", MuteMusicOnCoverAudio, SettingsFile);
+                IniHelper.WriteBool("Experimental", "CoverVideoAudio", ExperimentalCoverAudio, SettingsFile);
+                IniHelper.WriteBool("UI", "CoverAudioNoticeDismissed", CoverAudioNoticeDismissed, SettingsFile);
+                IniHelper.WriteBool("Music", "CoverVideoAudio", CoverVideoAudio, SettingsFile);
 
                 // ★ 功能隐藏
                 IniHelper.WriteBool("UI", "HideProbabilityOption", HideProbabilityOption, SettingsFile);

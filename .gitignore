@@ -1,36 +1,35 @@
-# ---- 构建产物 ----
 bin/
 obj/
 .vs/
 *.user
 *.suo
 
-# ---- 内部开发资料（不公开）----
 Readme/*
 !Readme/更新日志.txt
 Test/
 Pre-Delete/
 
-# ---- GitHub 发布目录：只保留指定的 exe ----
-Release/*
-!Release/Random-Select-3.75.2.exe
+Properties/PublishProfiles/
+CHANGELOG.txt
 
-# ---- 本地发布目录（不上传）----
+Release/*
+!Release/Random-Select-3.76.0.exe
+
 Release-DSH/
 
-# ---- 旧版本源码中的 slnx 与旧发布目录（不上传）----
 *.slnx
 backup/**/Release/
 
-# ---- 历史备份中的构建产物与本机配置 ----
+backup/
+
 backup/**/bin/
 backup/**/obj/
 backup/**/logs/
+backup/**/PublishProfiles/
 backup/**/*.user
 backup/**/*.exe
 backup/**/*.zip
 
-# ---- 历史备份中的内部开发资料（更新日志保留，编译需要）----
 backup/**/Readme/*
 !backup/**/Readme/更新日志.txt
 backup/**/Readme.md

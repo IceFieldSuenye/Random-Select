@@ -11,12 +11,12 @@
 
 ## 下载
 
-最新版本：**3.75.2**
+最新版本：**3.76.0**
 
-- [下载 Random-Select-3.75.2.exe](https://github.com/IceFieldSuenye/Random-Select/releases/latest)
+- [下载 Random-Select-3.76.0.exe](https://github.com/IceFieldSuenye/Random-Select/releases/latest)
 - [全部版本与历史源码](https://github.com/IceFieldSuenye/Random-Select/releases)
 
-> 发布包只提供 3.75.2 一个 exe；更早的版本以源码形式提供，不再提供 exe。
+> 发布包只提供 3.76.0 一个 exe；3.75.0及更早的版本以源码形式提供，不再提供 exe。
 
 ## 功能
 
@@ -36,7 +36,7 @@
 
 ## 使用
 
-1. 下载 `Random-Select-3.75.2.exe` 并双击运行。
+1. 下载 `Random-Select-3.76.0.exe` 并双击运行。
 2. 首次启动时按欢迎页提示选择卡池文件夹与资源文件夹。
 3. 在「选项 → 帮助」中查看卡池结构、抽取规则和各项设置的详细说明。
 
@@ -60,17 +60,21 @@ dotnet publish "Random Select.csproj" -c Release -r win-x64 --self-contained fal
 
 | 路径 | 说明 |
 | --- | --- |
-| 根目录 | 3.75.2 源码（WPF / .NET 10） |
-| `backup/` | 历史版本源码快照（3.9.3 至 3.75.0） |
+| `App.xaml` / `MainWindow.xaml` | 程序入口与主窗口（根目录只留工程文件、许可证与说明） |
+| `Pages/` | 主页、历史记录、抽取报告、抽取结果、抽取动画、选项、编辑封面等页面 |
+| `Dialogs/` | 各类对话框、弹窗与浮动面板 |
+| `Controls/` | 自定义控件与交互辅助（开关、卡片、搜索框、提示气泡等） |
+| `Core/` | 抽取引擎、卡池读写、封面处理、主题、日志等核心逻辑 |
+| `Interfaces/` | 页面 / 按钮宿主等接口定义 |
+| `Models/` | 高级抽卡规则等数据模型 |
+| `Assets/` | 图标、默认封面与程序清单 |
 | `Readme/更新日志.txt` | 更新日志（编译时内嵌到程序） |
-| `CHANGELOG.txt` | 更新日志的可读副本 |
 | `LICENSE` | MIT 许可证 |
 | `THIRD-PARTY-NOTICES.md` | 第三方组件与开源声明 |
 
 ## 历史版本说明
 
-- **3.75.2** 是当前最新版本；3.75.1、3.75.2 为问题修复版本，未单独备份源码，仓库根目录即 3.75.2 源码。
-- `backup/` 保留了 3.9.3 至 3.75.0 的源码快照，共 23 份；其中 3.9.3 有两份不同时间的快照。
+- **3.76.0** 是当前最新版本；3.75.1、3.75.2 为问题修复版本，未单独备份源码，仓库根目录即 3.76.0 源码（源码已按 `Pages / Dialogs / Controls / Core` 分目录）。
 - **3.9.3 之前的版本源码在早期整理时被误删，无法恢复。** 那些版本已经具备基础的随机抽取功能；由于源码缺失，不再提供对应版本。
 - 每个历史版本在 Releases 中以源码压缩包形式提供，不再提供 exe。
 

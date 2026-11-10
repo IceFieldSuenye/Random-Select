@@ -9,15 +9,15 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>Assets\app.manifest</ApplicationManifest>
-    <Version>3.75.2</Version>
+    <Version>3.76.0</Version>
     <Authors>冰原雪奈</Authors>
     <Company>冰原雪奈</Company>
     <Product>Random Select</Product>
     <PackageId>随机抽取器</PackageId>
-    <Copyright>冰原雪奈</Copyright>
+    <Copyright>Copyright © 2026 冰原雪奈 (IceFieldSuenye)</Copyright>
     <AssemblyName>随机抽取器</AssemblyName>
     <!-- 发布目录、源码备份目录、测试目录不参与后续编译（3.70：测试工程已从 tests\ 并到 Test\SmokeTest） -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);Release\**;backup\**;Test\**;tests\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Release\**;backup\**;Test\**;tests\**;Pre-Delete\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

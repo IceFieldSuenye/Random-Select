@@ -355,6 +355,8 @@ namespace RandomDrawer
         private void App_Activated(object sender, EventArgs e)
         {
             _isAppActive = true;
+            // 3.76.10：实验性功能开启时，封面音频跟随窗口焦点
+            if (App.ExperimentalCoverAudio) { try { CoverAudioRelay.SetWindowActive(true); } catch { } }
             UpdateMusicMuteState();
             // 3.34：窗口获得 / 失去焦点都不再暂停主界面封面（视频 / GIF），只影响背景音乐。
         }
@@ -362,6 +364,7 @@ namespace RandomDrawer
         private void App_Deactivated(object sender, EventArgs e)
         {
             _isAppActive = false;
+            if (App.ExperimentalCoverAudio) { try { CoverAudioRelay.SetWindowActive(false); } catch { } }
             UpdateMusicMuteState();
         }
 
@@ -1072,6 +1075,7 @@ namespace RandomDrawer
                 {
                     RestoreMainPageDrawButtons();
                 }
+                UpdateCoverAudioForPage(key);
                 MessageBus.Publish(new AppMessages.PageActivated(key));
             });
 
@@ -1093,6 +1097,35 @@ namespace RandomDrawer
                 {
                     mp.SetDrawButtonsVisible(true);
                 }
+            }
+            catch { }
+        }
+
+        /// <summary>3.76.10：实验性功能开启时，封面音频跟着「对应卡池」走进这些页面。</summary>
+        private static readonly string[] CoverAudioPages =
+            { "History", "GachaReport", "DrawResultPage", "DrawAnimation" };
+
+        private void UpdateCoverAudioForPage(string key)
+        {
+            try
+            {
+                // 实验性功能关闭 / 视频封面音频关闭：一律停止，回到旧行为
+                if (!App.ExperimentalCoverAudio || !App.CoverVideoAudio)
+                {
+                    CoverAudioRelay.Stop();
+                    return;
+                }
+
+                bool play = false;
+                foreach (var k in CoverAudioPages)
+                {
+                    if (string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) { play = true; break; }
+                }
+
+                if (play)
+                    CoverAudioRelay.PlayForPool(App.LastSelectedPoolDir ?? "");
+                else if (!string.Equals(key, "Main", StringComparison.OrdinalIgnoreCase))
+                    CoverAudioRelay.Stop(); // 主页自己会维护封面音频
             }
             catch { }
         }
@@ -1569,7 +1602,21 @@ namespace RandomDrawer
         {
             try
             {
-                Dispatcher.Invoke(new Action(UpdateMusicMuteState));
+                Dispatcher.Invoke(new Action(() =>
+                {
+                    // 3.76.10：实验性开关 / 视频封面音频变化时，当前页的封面音频立刻跟上
+                    bool onCoverAudioPage = false;
+                    foreach (var k in CoverAudioPages)
+                    {
+                        if (string.Equals(k, _currentPageKey, StringComparison.OrdinalIgnoreCase))
+                        { onCoverAudioPage = true; break; }
+                    }
+
+                    if (onCoverAudioPage) UpdateCoverAudioForPage(_currentPageKey);
+                    else if (!App.ExperimentalCoverAudio || !App.CoverVideoAudio) CoverAudioRelay.Stop();
+
+                    UpdateMusicMuteState();
+                }));
             }
             catch { }
         }
@@ -1670,8 +1717,9 @@ namespace RandomDrawer
         private void UpdateMusicMuteState()
         {
             bool autoMute = App.MuteWhenUnfocused && (!_isAppActive || this.WindowState == WindowState.Minimized);
-            // 卡池封面视频带声音时，背景音乐临时静音
-            bool duck = App.MuteMusicOnCoverAudio && _coverAudioActive;
+            // 卡池封面视频带声音、且允许播放视频音频时，背景音乐临时静音；
+            // 「封面视频存在音频时静音背景音乐」关掉后两者可以同时播放
+            bool duck = App.MuteMusicOnCoverAudio && App.CoverVideoAudio && _coverAudioActive;
             try { _musicPlayer.IsMuted = App.IsMuted || autoMute || duck; } catch { }
         }
 

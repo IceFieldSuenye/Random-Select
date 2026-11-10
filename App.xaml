@@ -49,6 +49,44 @@
         </Style>
 
         <!-- ============================================================
+             ★ 3.76：带投影的卡片（ShadowCard）
+             阴影画在底层、内容画在顶层，卡片里的文字不会被 DropShadowEffect 模糊。
+             ============================================================ -->
+        <Style TargetType="{x:Type local:ShadowCard}">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type local:ShadowCard}">
+                        <Grid>
+                            <!-- 阴影层：只画背景，不带任何内容 -->
+                            <Border x:Name="ShadowLayer"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="{TemplateBinding CornerRadius}"
+                                    Opacity="{TemplateBinding ShadowOpacity}">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="2" Direction="270"
+                                                      Opacity="1" Color="#000000"/>
+                                </Border.Effect>
+                            </Border>
+
+                            <!-- 内容层：边框 + 内容，不挂 Effect，文字保持清晰 -->
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ============================================================
              ★ 全局去掉键盘焦点虚线框（Tab / 方向键聚焦时那圈点线）
              控件模板默认用 {DynamicResource {x:Static SystemParameters.FocusVisualStyleKey}}
              取焦点样式，这里把该键替换成「空模板」，所有控件一起生效。
@@ -138,6 +176,8 @@
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="IsTextSearchEnabled" Value="False"/>
             <Setter Property="StaysOpenOnEdit" Value="True"/>
+            <!-- 3.76：下拉列表高度固定上限，避免某些窗口 / 缩放下被裁成半截 -->
+            <Setter Property="MaxDropDownHeight" Value="320"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ToolTip" Value="{Binding SelectionBoxItem, RelativeSource={RelativeSource Self}}"/>
@@ -147,7 +187,9 @@
                     <Style TargetType="ComboBoxItem">
                         <Setter Property="Padding" Value="6,6"/>
                         <Setter Property="Margin" Value="1,2"/>
+                        <Setter Property="MinHeight" Value="30"/>
                         <Setter Property="FontSize" Value="13"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ComboBoxItem">
@@ -156,7 +198,8 @@
                                             CornerRadius="4"
                                             Padding="{TemplateBinding Padding}"
                                             SnapsToDevicePixels="True">
-                                        <ContentPresenter VerticalAlignment="Center"/>
+                                        <ContentPresenter VerticalAlignment="Center"
+                                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
@@ -164,6 +207,11 @@
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
                                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_D1D5DB}"/>
+                                        </Trigger>
+                                        <!-- 3.76：禁用的项（例如「蔚蓝档案（新）」下的「常驻招募」）要看得出来 -->
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Foreground" Value="{DynamicResource Fg_BBBBBB}"/>
+                                            <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
