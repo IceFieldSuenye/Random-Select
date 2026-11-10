@@ -4,8 +4,9 @@ obj/
 *.user
 *.suo
 
-Readme/*
-!Readme/更新日志.txt
+Agent/
+*.slnx
+
 Test/
 Pre-Delete/
 
@@ -17,23 +18,8 @@ Release/*
 
 Release-DSH/
 
-*.slnx
-backup/**/Release/
-
 backup/
 
-backup/**/bin/
-backup/**/obj/
-backup/**/logs/
-backup/**/PublishProfiles/
-backup/**/*.user
-backup/**/*.exe
-backup/**/*.zip
-
-backup/**/Readme/*
-!backup/**/Readme/更新日志.txt
-backup/**/Readme.md
-backup/**/structure.md
-backup/**/thinking.md
-backup/**/Release/Readme.md
-backup/**/Release/structure.md
+*_wpftmp.csproj
+*.wpftmp.csproj
+/Assets/更新日志.md
