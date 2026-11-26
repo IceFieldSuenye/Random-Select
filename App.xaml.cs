@@ -133,9 +133,21 @@ namespace RandomDrawer
         public static bool ExperimentalCoverAudio = false;
 
         /// <summary>
+        /// 3.77.0-snapshot-17：实验性功能「无上限抽取次数」（选项 → 系统 → 实验性功能，默认关闭）。
+        /// 开启后抽取次数上限从 9 999 提升到 int.MaxValue，并改走独立的批量抽取路径；
+        /// 关闭时完全沿用原来的抽取逻辑。
+        /// </summary>
+        public static bool UnlimitedDrawCount = false;
+
+        /// <summary>
         /// 3.76.10：编辑封面保存带音频的视频时，「保存后不会采用其音频」的提示是否已被用户勾选「不再提示」。
         /// </summary>
         public static bool CoverAudioNoticeDismissed = false;
+
+        /// <summary>
+        /// 3.77.0-snapshot-7：选择「使用原封面缩略图」时「批注会一起合成进缩略图」的提示是否已被用户勾选「不再提示」。
+        /// </summary>
+        public static bool ThumbOverlayNoticeDismissed = false;
 
         /// <summary>
         /// 是否显示欢迎页：首次运行（找不到配置文件）或用户在「选项 → 系统」里打开了「启动时显示欢迎页」。
@@ -173,6 +185,14 @@ namespace RandomDrawer
         public static double MusicVolume = 0.5;
         public static bool IsMuted = false;
 
+        /// <summary>3.77.0-snapshot-4：命令行带 --mute 时静音启动。</summary>
+        public static bool MuteOnStartup = false;
+        /// <summary>静音启动时记下用户原始设置，保存配置时还原，保证「仅本次生效」。</summary>
+        private static bool _musicEnabledBeforeMute;
+        private static bool _isMutedBeforeMute;
+        /// <summary>用户在选项页手动动过背景音乐开关后，--mute 不再覆盖配置。</summary>
+        public static bool MusicSettingsTouched = false;
+
         /// <summary>失去焦点（最小化 / 切到其它窗口）时是否静音背景音乐。</summary>
         public static bool MuteWhenUnfocused = true;
 
@@ -184,6 +204,8 @@ namespace RandomDrawer
         public static bool HideAdvancedGacha = false;
         public static bool HideEditPool = false;
         public static bool HideOptionSection = false;
+        /// <summary>3.77.0-snapshot-21：隐藏「实验性功能」卡片，同时收起帮助页里的实验性功能说明。</summary>
+        public static bool HideExperimental = false;
         /// <summary>视觉呈现模式：流畅优先 / 加载速度优先。</summary>
         public enum RenderPreferenceKind { Smooth = 0, Fast = 1 }
 
@@ -226,10 +248,11 @@ namespace RandomDrawer
         public static bool IsEditPoolVisible => !HideEditPool || IsHiddenRevealed;
         public static bool IsOptionSectionVisible => !HideOptionSection || IsHiddenRevealed;
         public static bool IsGachaReportVisible => !HideGachaReport || IsHiddenRevealed;
+        public static bool IsExperimentalVisible => !HideExperimental || IsHiddenRevealed;
 
         /// <summary>是否有任何隐藏项（用于 F12 判断是否有效）。</summary>
         public static bool HasAnyHiddenOption =>
-            HideProbabilityOption || HideAdvancedGacha || HideEditPool || HideOptionSection || HideGachaReport;
+            HideProbabilityOption || HideAdvancedGacha || HideEditPool || HideOptionSection || HideGachaReport || HideExperimental;
 
         private static Mutex _mutex;
 
@@ -395,6 +418,24 @@ namespace RandomDrawer
                 RuntimeLog.Info("系统识别：" + WindowsDisplayName);
             }
             catch { }
+
+            // 3.77.0-snapshot-4：--mute 静音启动（仅本次生效，见 LoadSettings / SaveSettings）
+            try
+            {
+                if (e != null && e.Args != null)
+                {
+                    foreach (string arg in e.Args)
+                    {
+                        if (string.Equals(arg, "--mute", StringComparison.OrdinalIgnoreCase))
+                        {
+                            MuteOnStartup = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch { }
+            if (MuteOnStartup) RuntimeLog.Info("启动参数 --mute：本次运行静音启动");
 
             EventManager.RegisterClassHandler(typeof(TextBox), FrameworkElement.LoadedEvent,
                 new RoutedEventHandler(TextInput_Loaded));
@@ -717,9 +758,21 @@ namespace RandomDrawer
                 MuteMusicOnCoverAudio = IniHelper.ReadBool("Music", "MuteMusicOnCoverAudio", true, SettingsFile);
                 // 3.76.10：「封面视频音频」默认关闭，只有开启实验性功能后才可能为 true
                 ExperimentalCoverAudio = IniHelper.ReadBool("Experimental", "CoverVideoAudio", false, SettingsFile);
+                UnlimitedDrawCount = IniHelper.ReadBool("Experimental", "UnlimitedDrawCount", false, SettingsFile);
                 CoverAudioNoticeDismissed = IniHelper.ReadBool("UI", "CoverAudioNoticeDismissed", false, SettingsFile);
+                ThumbOverlayNoticeDismissed = IniHelper.ReadBool("UI", "ThumbOverlayNoticeDismissed", false, SettingsFile);
                 CoverVideoAudio = ExperimentalCoverAudio
                     && IniHelper.ReadBool("Music", "CoverVideoAudio", false, SettingsFile);
+
+                // 3.77.0-snapshot-4：--mute 启动参数 —— 本次运行静音、背景音乐按关闭处理，
+                // 但配置文件里的值先记下来，SaveSettings 时还原，下次启动仍然是用户原来的设置。
+                if (MuteOnStartup && !MusicSettingsTouched)
+                {
+                    _musicEnabledBeforeMute = IsMusicEnabled;
+                    _isMutedBeforeMute = IsMuted;
+                    IsMusicEnabled = false;
+                    IsMuted = true;
+                }
 
                 // ★ 功能隐藏
                 HideProbabilityOption = IniHelper.ReadBool("UI", "HideProbabilityOption", false, SettingsFile);
@@ -727,6 +780,7 @@ namespace RandomDrawer
                 HideEditPool = IniHelper.ReadBool("UI", "HideEditPool", false, SettingsFile);
                 HideOptionSection = IniHelper.ReadBool("UI", "HideOptionSection", false, SettingsFile);
                 HideGachaReport = IniHelper.ReadBool("UI", "HideGachaReport", false, SettingsFile);
+                HideExperimental = IniHelper.ReadBool("UI", "HideExperimental", false, SettingsFile);
             try
             {
                 // 低配模式：配置里没存过就按设备自动判断（虚拟机 / 2 核 4G 默认开启）；
@@ -771,6 +825,12 @@ namespace RandomDrawer
                 // 3.75.1：0 = 不模糊，允许存 0
                 MainBackgroundBlurRadius = Math.Max(0, Math.Min(100, MainBackgroundBlurRadius));
                 WindowTitleFormat = IniHelper.ReadValue("UI", "WindowTitle", "", SettingsFile) ?? "";
+
+            // diagnostic: RS_TITLE_TAG lets a test build stamp its title, so a stale exe is obvious
+            // format: <app name> <version> <tag>
+            var titleTag = Environment.GetEnvironmentVariable("RS_TITLE_TAG");
+            if (!string.IsNullOrWhiteSpace(titleTag))
+                WindowTitleFormat = WindowTitleFormatter.DefaultTitle + " {version} " + titleTag.Trim();
                 SuppressIconCompatNotice = IniHelper.ReadBool("UI", "SuppressIconCompatNotice", false, SettingsFile)
                     || IniHelper.ReadBool("UI", "SuppressWin7CompatNotice", false, SettingsFile);
 
@@ -896,15 +956,27 @@ namespace RandomDrawer
                 IniHelper.WriteBool("State", "IsHistoryDisabled", IsHistoryDisabled, SettingsFile);
                 IniHelper.WriteBool("State", "IsAnimationDisabled", IsAnimationDisabled, SettingsFile);
                 IniHelper.WriteValue("Music", "MusicPath", LastMusicPath ?? "", SettingsFile);
-                IniHelper.WriteBool("Music", "EnableMusic", IsMusicEnabled, SettingsFile);
-                IniHelper.WriteBool("Music", "IsMuted", IsMuted, SettingsFile);
+
+                // 3.77.0-snapshot-4：--mute 只影响本次运行，写配置时把用户原来的开关还原回去
+                bool musicEnabledToSave = IsMusicEnabled;
+                bool mutedToSave = IsMuted;
+                if (MuteOnStartup && !MusicSettingsTouched)
+                {
+                    musicEnabledToSave = _musicEnabledBeforeMute;
+                    mutedToSave = _isMutedBeforeMute;
+                }
+
+                IniHelper.WriteBool("Music", "EnableMusic", musicEnabledToSave, SettingsFile);
+                IniHelper.WriteBool("Music", "IsMuted", mutedToSave, SettingsFile);
             IniHelper.WriteBool("Music", "MuteWhenUnfocused", MuteWhenUnfocused, SettingsFile);
                 IniHelper.WriteValue("Music", "Volume", ((int)(MusicVolume * 100)).ToString(), SettingsFile);
                 IniHelper.WriteValue("Music", "SoundEffectVolume", ((int)(SoundEffectVolume * 100)).ToString(), SettingsFile);
                 IniHelper.WriteBool("Music", "SoundEffectMuted", IsSoundEffectMuted, SettingsFile);
                 IniHelper.WriteBool("Music", "MuteMusicOnCoverAudio", MuteMusicOnCoverAudio, SettingsFile);
                 IniHelper.WriteBool("Experimental", "CoverVideoAudio", ExperimentalCoverAudio, SettingsFile);
+                IniHelper.WriteBool("Experimental", "UnlimitedDrawCount", UnlimitedDrawCount, SettingsFile);
                 IniHelper.WriteBool("UI", "CoverAudioNoticeDismissed", CoverAudioNoticeDismissed, SettingsFile);
+                IniHelper.WriteBool("UI", "ThumbOverlayNoticeDismissed", ThumbOverlayNoticeDismissed, SettingsFile);
                 IniHelper.WriteBool("Music", "CoverVideoAudio", CoverVideoAudio, SettingsFile);
 
                 // ★ 功能隐藏
@@ -913,6 +985,7 @@ namespace RandomDrawer
                 IniHelper.WriteBool("UI", "HideEditPool", HideEditPool, SettingsFile);
                 IniHelper.WriteBool("UI", "HideOptionSection", HideOptionSection, SettingsFile);
             IniHelper.WriteBool("UI", "HideGachaReport", HideGachaReport, SettingsFile);
+            IniHelper.WriteBool("UI", "HideExperimental", HideExperimental, SettingsFile);
             try
             {
                 IniHelper.WriteValue("UI", "RenderPreference",

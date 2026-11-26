@@ -11,6 +11,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Input;
 using System.Threading.Tasks;
 
 namespace RandomDrawer
@@ -23,6 +24,13 @@ namespace RandomDrawer
         private DrawResultDisplayMode _displayMode = DrawResultDisplayMode.CardGrid;
         private HighlightConfig _highlight;
         private PersonalizationSettings _settings = new PersonalizationSettings();
+
+        // ★ 3.77.0-snapshot-17：大量结果按页渲染（每页最多 10 000 条，底部居中翻页）
+        private const int ResultPageSize = 10000;
+        private int _pageIndex = 1;
+        private int _pageCount = 1;
+        private long _totalDrawn;
+        private bool _isPaging;
 
         private readonly MediaPlayer _soundPlayer = new MediaPlayer();
 
@@ -251,6 +259,12 @@ namespace RandomDrawer
             _highlight = msg.Highlight;
             _settings = msg.Settings ?? new PersonalizationSettings();
 
+            // ★ 3.77.0-snapshot-17：分页状态复位（普通抽取只有 1 页，分页条隐藏）
+            _totalDrawn = msg.TotalDrawn > 0 ? msg.TotalDrawn : _items.Count;
+            _pageIndex = 1;
+            _pageCount = Math.Max(1, (int)((_items.Count + ResultPageSize - 1L) / ResultPageSize));
+            UpdatePager();
+
             // ★ 页面实例是复用的：上次的滚动位置会留在原处，这里先复位到顶部
             try
             {
@@ -267,7 +281,7 @@ namespace RandomDrawer
             // ★ 先显示加载遮罩，再分批生成结果，避免大量结果时界面未响应。
             //   但结果很少（<500 条）时渲染几乎瞬间完成，显示遮罩只会闪一下，所以不显示。
             _renderCancelled = false;
-            bool showRenderLoading = _items.Count >= UiThresholds.LoadingOverlayMinCount;
+            bool showRenderLoading = CurrentPageItemCount >= UiThresholds.LoadingOverlayMinCount;
             if (showRenderLoading)
             {
                 ShowRenderLoading();
@@ -748,17 +762,27 @@ namespace RandomDrawer
 
         private async Task PopulateResultsAsync()
         {
-            int count = _items.Count;
+            // ★ 3.77.0-snapshot-17：只渲染当前页，避免 100 万条结果一次性建视觉树
+            int start = Math.Max(0, (_pageIndex - 1) * ResultPageSize);
+            int take = Math.Min(ResultPageSize, Math.Max(0, _items.Count - start));
+            List<DrawResultData> pageItems = take > 0
+                ? _items.GetRange(start, take)
+                : new List<DrawResultData>();
 
+            long total = _totalDrawn > 0 ? _totalDrawn : _items.Count;
             if (_lastDrawCount == 1)
                 TxtCountHint.Text = "单次抽取结果";
             else
-                TxtCountHint.Text = count > 0 ? $"本次抽取 {count} 项" : "";
+                TxtCountHint.Text = total > 0 ? $"本次抽取 {total:N0} 项" : "";
+
+            // 超出 100 万条的部分只计数、不逐条保留
+            if (total > _items.Count)
+                TxtCountHint.Text += $"（只逐条展示前 {_items.Count:N0} 条）";
 
             if (_displayMode == DrawResultDisplayMode.List)
             {
                 // 列表模式：垂直滚动条由页面右侧单独提供，滚动区贴到窗口边缘
-                ResultScrollViewer.Margin = new Thickness(20, 70, 20, 90);
+                ResultScrollViewer.Margin = new Thickness(20, 70, 20, 140);
                 CardsHost.Margin = new Thickness(0);
                 ResultScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
                 ResultScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -774,7 +798,7 @@ namespace RandomDrawer
             {
                 // ★ 网格模式：内置滚动条不显示，改用页面右侧整高的 PageScrollBar
                 //   （贴住窗口右边、占满高度、跟随主题，不会因为自定义背景而显出一条浅色槽）
-                ResultScrollViewer.Margin = new Thickness(20, 70, 20, 90);
+                ResultScrollViewer.Margin = new Thickness(20, 70, 20, 140);
                 CardsHost.Margin = new Thickness(0);
                 ResultScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
                 ResultScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -782,7 +806,7 @@ namespace RandomDrawer
             }
 
             // ★ 传入 _settings 和 _poolDir，以便根据背景设置处理局部毛玻璃效果
-            await DrawResultRenderer.RenderAsync(CardsHost, _items, _displayMode, _highlight, _settings, _poolDir,
+            await DrawResultRenderer.RenderAsync(CardsHost, pageItems, _displayMode, _highlight, _settings, _poolDir,
                 _glassBackdrop as BitmapSource, ResultRoot,
                 (built, total) => UpdateRenderProgress(built, total),
                 () => _renderCancelled);
@@ -807,6 +831,136 @@ namespace RandomDrawer
             _drawButtonsVisible = false;
             SetDrawButtonsVisible(true);
             PlayResultSounds();
+        }
+
+        // ============================================================
+        // 3.77.0-snapshot-17：大量结果分页
+        // ============================================================
+
+        /// <summary>当前页包含的条目数（用于判断是否显示加载遮罩）。</summary>
+        private int CurrentPageItemCount
+        {
+            get
+            {
+                if (_items == null || _items.Count == 0) return 0;
+                int start = Math.Max(0, (_pageIndex - 1) * ResultPageSize);
+                return Math.Max(0, Math.Min(ResultPageSize, _items.Count - start));
+            }
+        }
+
+        private void UpdatePager()
+        {
+            try
+            {
+                if (PagerPanel == null) return;
+
+                if (_pageCount <= 1)
+                {
+                    PagerPanel.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                PagerPanel.Visibility = Visibility.Visible;
+                // 3.77.0-snapshot-19：页码是可输入的文本框，回车跳转；不回车时仍显示当前页
+                if (TxtPageInput != null)
+                {
+                    TxtPageInput.Text = _pageIndex.ToString();
+                    // 3.77.0-snapshot-20：按总页数的位数放宽，避免「100」这种页码被裁掉
+                    int digits = _pageCount.ToString("N0").Length;
+                    TxtPageInput.Width = Math.Max(52, 14 + digits * 9);
+                }
+                if (TxtPageTotal != null) TxtPageTotal.Text = $"页 / 共 {_pageCount:N0} 页";
+                if (BtnPrevPage != null) BtnPrevPage.IsEnabled = _pageIndex > 1;
+                if (BtnNextPage != null) BtnNextPage.IsEnabled = _pageIndex < _pageCount;
+            }
+            catch { }
+        }
+
+        private async void PrevPage_Click(object sender, RoutedEventArgs e)
+        {
+            await GoToPageAsync(_pageIndex - 1);
+        }
+
+        private async void NextPage_Click(object sender, RoutedEventArgs e)
+        {
+            await GoToPageAsync(_pageIndex + 1);
+        }
+
+        private async void TxtPageInput_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true;
+
+            int page;
+            if (!int.TryParse(TxtPageInput.Text, out page))
+            {
+                TxtPageInput.Text = _pageIndex.ToString();
+                return;
+            }
+
+            if (page == _pageIndex)
+            {
+                TxtPageInput.Text = _pageIndex.ToString();
+                return;
+            }
+
+            await GoToPageAsync(page);
+        }
+
+        private void TxtPageInput_GotFocus(object sender, RoutedEventArgs e)
+        {
+            try { TxtPageInput?.SelectAll(); } catch { }
+        }
+
+        private void TxtPageInput_LostFocus(object sender, RoutedEventArgs e)
+        {
+            // 失焦时把非法输入/旧输入还原成当前页
+            try { if (TxtPageInput != null) TxtPageInput.Text = _pageIndex.ToString(); } catch { }
+        }
+
+        private async Task GoToPageAsync(int page)
+        {
+            if (_isPaging || _pageCount <= 1) return;
+
+            page = Math.Max(1, Math.Min(_pageCount, page));
+            if (page == _pageIndex) return;
+
+            _isPaging = true;
+            try
+            {
+                if (BtnPrevPage != null) BtnPrevPage.IsEnabled = false;
+                if (BtnNextPage != null) BtnNextPage.IsEnabled = false;
+
+                _pageIndex = page;
+                _renderCancelled = false;
+
+                // 每页对象 ≥500 时才显示加载遮罩（与整页渲染的约定一致）
+                bool showLoading = CurrentPageItemCount >= UiThresholds.LoadingOverlayMinCount;
+                if (showLoading)
+                {
+                    ShowRenderLoading();
+                }
+                else
+                {
+                    if (RenderLoadingPanel != null) RenderLoadingPanel.Visibility = Visibility.Collapsed;
+                    if (ButtonBar != null) ButtonBar.Visibility = Visibility.Collapsed;
+                }
+
+                await Dispatcher.Yield(DispatcherPriority.Background);
+                await PopulateResultsAsync();
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error(ex, $"结果页翻页失败：页码={page}");
+                HideRenderLoading();
+                _drawButtonsVisible = false;
+                SetDrawButtonsVisible(true);
+            }
+            finally
+            {
+                _isPaging = false;
+                UpdatePager();
+            }
         }
 
         private void PlayResultSounds()
@@ -872,7 +1026,20 @@ namespace RandomDrawer
             }
             else
             {
-                int? picked = await win.ShowDrawCountPanelAsync(_lastDrawCount);
+                // ★ 3.77.0-snapshot-18：高级抽卡规则卡池保持 1~9999，避免规则被批量路径绕过
+                bool advancedRules = false;
+                try
+                {
+                    string gachaFile = Path.Combine(_poolDir, "gacha_settings.ini");
+                    if (File.Exists(gachaFile))
+                    {
+                        var gs = GachaSettings.LoadSettingsFromFile(gachaFile);
+                        advancedRules = gs != null && gs.Enabled;
+                    }
+                }
+                catch { }
+                int panelMax = (App.UnlimitedDrawCount && !advancedRules) ? int.MaxValue : 9999;
+                int? picked = await win.ShowDrawCountPanelAsync(_lastDrawCount, panelMax);
                 if (picked == null)
                 {
                     // ★ 修复：输入面板取消时，平滑恢复按钮

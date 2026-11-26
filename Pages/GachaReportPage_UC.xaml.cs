@@ -1126,13 +1126,11 @@ namespace RandomDrawer
             try
             {
                 string poolDir = App.LastSelectedPoolDir ?? "";
-                string historyFile = Path.Combine(poolDir, "history.txt");
-
                 long historyTicks = 0;
                 try
                 {
-                    if (File.Exists(historyFile))
-                        historyTicks = File.GetLastWriteTime(historyFile).Ticks;
+                    // 3.77.0-snapshot-17：历史可能拆成多个分片，取全部分片的最新时间
+                    historyTicks = HistoryFiles.GetLastWriteTicks(poolDir);
                 }
                 catch { }
 
@@ -2078,8 +2076,8 @@ namespace RandomDrawer
             long historyTicks = 0;
             try
             {
-                string historyFile = Path.Combine(poolDir, "history.txt");
-                if (File.Exists(historyFile)) historyTicks = File.GetLastWriteTime(historyFile).Ticks;
+                // 3.77.0-snapshot-17：历史可能拆成多个分片，取全部分片的最新时间
+                historyTicks = HistoryFiles.GetLastWriteTicks(poolDir);
             }
             catch { }
 

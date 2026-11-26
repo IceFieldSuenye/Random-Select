@@ -33,6 +33,16 @@ namespace RandomDrawer
         private static readonly Dictionary<Window, Tuple<Panel, SizeChangedEventHandler>> _activeHandlers =
             new Dictionary<Window, Tuple<Panel, SizeChangedEventHandler>>();
 
+        // ★ 3.77.0-snapshot-4：每条气泡带自己的「代号 + 收起计时器」。
+        //   以前旧计时器不会随气泡被替换而停止，反复触发时旧计时器到点会把**新**气泡提前收掉，
+        //   看起来就是「提示气泡动画有概率显示异常」。
+        private static readonly Dictionary<Window, DispatcherTimer> _activeTimers =
+            new Dictionary<Window, DispatcherTimer>();
+
+        private static readonly Dictionary<Window, int> _activeGen = new Dictionary<Window, int>();
+
+        private static int _genSeq;
+
         /// <summary>在窗口顶部显示一条成功提示（绿色对勾）。</summary>
         public static void ShowSuccess(Window owner, string message, double durationMs = 2400)
         {
@@ -58,6 +68,10 @@ namespace RandomDrawer
 
                 // 同一窗口只保留一条：新的来了先把旧的收掉，避免叠在一起
                 RemoveLayer(owner);
+
+                // 新的代号：之后所有异步收尾都要先核对自己是不是「当前那条」
+                int gen = ++_genSeq;
+                _activeGen[owner] = gen;
 
                 var icon = new TextBlock
                 {
@@ -152,6 +166,13 @@ namespace RandomDrawer
                 {
                     try
                     {
+                        // 排队期间又被新的气泡顶替了：这条直接作废（连同刚挂上的空图层）
+                        if (!_activeGen.TryGetValue(owner, out int curGen) || curGen != gen)
+                        {
+                            try { root.Children.Remove(host); } catch { }
+                            return;
+                        }
+
                         double height = card.ActualHeight > 0 ? card.ActualHeight : card.DesiredSize.Height;
                         if (height <= 0) height = 44;
 
@@ -175,10 +196,12 @@ namespace RandomDrawer
                         {
                             Interval = TimeSpan.FromMilliseconds(Math.Max(600, durationMs))
                         };
+                        _activeTimers[owner] = timer;
 
                         timer.Tick += (s2, e2) =>
                         {
                             timer.Stop();
+                            try { if (_activeTimers.TryGetValue(owner, out var t0) && ReferenceEquals(t0, timer)) _activeTimers.Remove(owner); } catch { }
 
                             var easeIn = new QuadraticEase { EasingMode = EasingMode.EaseIn };
 
@@ -192,7 +215,11 @@ namespace RandomDrawer
                                 EasingFunction = easeIn
                             };
 
-                            fadeOut.Completed += (s3, e3) => RemoveLayer(owner);
+                            // 只有「还是自己这条」才允许回收 —— 否则会把刚弹出来的新气泡一起摘掉
+                            fadeOut.Completed += (s3, e3) =>
+                            {
+                                if (_activeGen.TryGetValue(owner, out int g2) && g2 == gen) RemoveLayer(owner);
+                            };
 
                             move.BeginAnimation(TranslateTransform.YProperty, slideUp);
                             card.BeginAnimation(UIElement.OpacityProperty, fadeOut);
@@ -212,6 +239,15 @@ namespace RandomDrawer
             try
             {
                 if (owner == null) return;
+
+                // 停止还在跑的收起计时器 + 让该条的代号失效
+                if (_activeTimers.TryGetValue(owner, out var timer))
+                {
+                    _activeTimers.Remove(owner);
+                    try { timer.Stop(); } catch { }
+                }
+                _activeGen.Remove(owner);
+
                 if (!_activeLayers.TryGetValue(owner, out var layer)) return;
 
                 _activeLayers.Remove(owner);

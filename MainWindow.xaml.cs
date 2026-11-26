@@ -775,6 +775,13 @@ namespace RandomDrawer
 
             int count = msg.DrawCount <= 0 ? 1 : msg.DrawCount;
             var drawTimer = System.Diagnostics.Stopwatch.StartNew();
+
+            // ★ 3.77.0-snapshot-17：与主页一致——超大数据量且关闭不重复抽取时走独立批量路径
+            // ★ 3.77.0-snapshot-18：启用高级抽卡规则的卡池不能走批量路径，否则保底/状态机被绕过
+            bool advancedRules = session.Engine.HasActiveGachaStrategy(session.Pool.Dir);
+            bool unlimitedPath = App.UnlimitedDrawCount && !advancedRules && count > 9999 && session.NoRepeat == false;
+            if (unlimitedPath) session.UseAnimation = false;
+
             RuntimeLog.Info($"继续抽取开始：卡池={session.Pool.UniqueName}，条目={session.Pool.ItemCount}，次数={count}，不重复={session.NoRepeat}，动画={session.UseAnimation}，展示模式={session.DisplayMode}");
             // 计算放后台；遮罩只在 ≥500 次时显示，避免少量抽取时闪一下
             bool heavyWork = count >= UiThresholds.BackgroundWorkMinCount;
@@ -782,7 +789,13 @@ namespace RandomDrawer
             List<DrawResultData> results;
             try
             {
-                if (heavyWork)
+                if (unlimitedPath)
+                {
+                    ShowDrawBusy("正在抽取中，请稍候...");
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                    results = await Task.Run(() => session.PerformDrawUnlimited(count));
+                }
+                else if (heavyWork)
                 {
                     if (showBusy) ShowDrawBusy("正在抽取中，请稍候...");
                     await Dispatcher.Yield(DispatcherPriority.Background);
@@ -827,7 +840,8 @@ namespace RandomDrawer
             {
                 MessageBus.Publish(new AppMessages.OpenDrawResultPage(
                     results, session.Pool.Dir, count, session.Pers,
-                    session.Highlight, session.DisplayMode));
+                    session.Highlight, session.DisplayMode,
+                    unlimitedPath ? session.TotalDrawn : 0));
                 if (!isOnResult) Navigate("DrawResultPage");
             }
         }

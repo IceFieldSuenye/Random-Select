@@ -268,13 +268,20 @@ namespace RandomDrawer.Messaging
             public HighlightConfig Highlight { get; }
             public DrawResultDisplayMode DisplayMode { get; }
 
+            /// <summary>
+            /// 3.77.0-snapshot-17：实际抽取总次数（无限次抽取被截断时大于 Items.Count）。
+            /// 普通抽取传 0，结果页回退为 Items.Count。
+            /// </summary>
+            public long TotalDrawn { get; }
+
             public OpenDrawResultPage(
                 List<DrawResultData> items,
                 string poolDir,
                 int lastDrawCount,
                 PersonalizationSettings settings,
                 HighlightConfig highlight,
-                DrawResultDisplayMode displayMode = DrawResultDisplayMode.CardGrid)
+                DrawResultDisplayMode displayMode = DrawResultDisplayMode.CardGrid,
+                long totalDrawn = 0)
             {
                 Items = items ?? new List<DrawResultData>();
                 PoolDir = poolDir ?? "";
@@ -282,6 +289,7 @@ namespace RandomDrawer.Messaging
                 Settings = settings;
                 Highlight = highlight;
                 DisplayMode = displayMode;
+                TotalDrawn = totalDrawn;
             }
         }
 

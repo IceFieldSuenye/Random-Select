@@ -23,6 +23,11 @@ namespace RandomDrawer
         public bool NoRepeat { get; set; } = true;
         public int LastDrawCount { get; set; } = 1;
 
+        /// <summary>
+        /// 3.77.0-snapshot-17：最近一次「无限次抽取」实际抽取的总次数（普通抽取时为 0，结果页用 Items.Count）。
+        /// </summary>
+        public long TotalDrawn { get; private set; }
+
         public List<DrawResultData> PerformDraw(int count)
         {
             // ★ 抽取 + 写历史 + 更新保底状态必须串行，避免后台线程与「继续抽取」并发
@@ -38,6 +43,40 @@ namespace RandomDrawer
                 Engine.WriteDrawHistory(Pool, results, drawType);
                 LastDrawCount = count;
                 return BuildDrawResultData(results);
+            }
+        }
+
+        /// <summary>
+        /// 3.77.0-snapshot-17：实验性「无上限抽取次数」的抽取路径。
+        /// 只在开启实验性开关、输入 &gt; 9 999、且关闭「不重复抽取」时由主页调用；
+        /// 原有 PerformDraw / DrawEngine.ExecuteDraw 的行为完全不变。
+        /// </summary>
+        public List<DrawResultData> PerformDrawUnlimited(int count, Action<long> progress = null)
+        {
+            lock (DrawLock)
+            {
+                TotalDrawn = 0;
+                if (Pool == null || Pool.Items == null || Pool.Items.Count == 0)
+                    return new List<DrawResultData>();
+
+                string drawType = count == 1 ? "单次抽取" : $"{count}次抽取";
+                HistoryStreamWriter history = null;
+                try
+                {
+                    if (!App.IsHistoryDisabled)
+                        history = new HistoryStreamWriter(Pool.Dir, drawType);
+
+                    var outcome = UnlimitedDrawEngine.Execute(count, Pool, progress, history);
+                    TotalDrawn = outcome.TotalDrawn;
+                    LastDrawCount = count;
+
+                    if (outcome.Items.Count == 0) return new List<DrawResultData>();
+                    return BuildDrawResultData(outcome.Items);
+                }
+                finally
+                {
+                    history?.Dispose();
+                }
             }
         }
 

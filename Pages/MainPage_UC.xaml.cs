@@ -20,7 +20,13 @@ namespace RandomDrawer
     public partial class MainPage_UC : UserControl, IPageAnimation, IHandleEscape, IDrawButtonsHost
     {
         public static readonly DependencyProperty IsSelectedProperty = DependencyProperty.RegisterAttached(
-            "IsSelected", typeof(bool), typeof(MainPage_UC), new PropertyMetadata(false));
+            "IsSelected", typeof(bool), typeof(MainPage_UC),
+            new PropertyMetadata(false, OnIsSelectedChanged));
+
+        private static void OnIsSelectedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is Button btn && e.NewValue is bool selected) ApplyCardSelection(btn, selected);
+        }
 
         public static void SetIsSelected(UIElement element, bool value) => element.SetValue(IsSelectedProperty, value);
         public static bool GetIsSelected(UIElement element) => (bool)element.GetValue(IsSelectedProperty);
@@ -538,7 +544,9 @@ namespace RandomDrawer
             if (!_subscribed) return;
             _subscribed = false;
             MessageBus.Unsubscribe(_onPageActivated);
-            MessageBus.Unsubscribe(_onPoolListChanged);
+            // 3.77.0-snapshot-4：PoolListChanged 与 CoverEditorFinished 一样要保留订阅——
+            // 封面编辑页保存后会在「主页已经 Unloaded、还没重新 Loaded」的空档里发通知，
+            // 这里如果退订，缩略图改了样式回到主页也不刷新（表现为「保存后卡片没同步」）。
             MessageBus.Unsubscribe(_onPersonalizationFinished);
             MessageBus.Unsubscribe(_onUiOptionsChanged);
             MessageBus.Unsubscribe<AppMessages.PoolAudioSettingsChanged>(OnPoolAudioSettingsChanged);
@@ -1214,7 +1222,8 @@ namespace RandomDrawer
 
                         // ★ 目录集合没变也可能「显示内容」变了（取消加密、改名、换封面…），
                         //   这时必须重建按钮，否则主页会一直显示旧的锁图标 / 旧名字。
-                        if (PoolsVisualChanged(oldPools, newPools))
+                        if (PoolsVisualChanged(oldPools, newPools)
+                            || !string.Equals(ComputeThumbSignature(), _lastThumbSignature, StringComparison.Ordinal))
                         {
                             UpdateUIState();
                             UpdatePoolUI();
@@ -1571,6 +1580,8 @@ namespace RandomDrawer
 
         private System.Windows.Threading.DispatcherTimer _poolWatchTimer;
         private string _lastPoolSignature = "";
+        // 3.77.0-snapshot-4：缩略图设置快照（模式/圆角/名字/颜色），用来判断卡片要不要重建
+        private string _lastThumbSignature = "";
         private void UpdateUIState()
         {
             bool hasAnyPool = _allPools.Count > 0;
@@ -1591,24 +1602,54 @@ namespace RandomDrawer
             PoolButtonsPanel.Children.Clear();
             for (int i = 0; i < _allPools.Count; i++)
             {
-                Button btn = new Button
+                PoolInfo pool = _allPools[i];
+                Button btn = new Button { Tag = i };
+
+                // 3.77：缩略图卡片（整卡圆角 / 悬浮主题框 / 选中呼吸渐变）优先
+                if (!TryBuildThumbCard(btn, pool, i))
                 {
-                    Content = BuildPoolButtonContent(_allPools[i]),
-                    Style = (Style?)TryFindResource(App.MainBackgroundBlur ? "AcrylicPoolButtonStyle" : "PoolButtonStyle")
-                            ?? (Style?)TryFindResource("PoolButtonStyle"),
-                    Tag = i
-                };
+                    btn.Content = BuildPoolButtonContent(pool);
+                    btn.Style = (Style?)TryFindResource(App.MainBackgroundBlur ? "AcrylicPoolButtonStyle" : "PoolButtonStyle")
+                                ?? (Style?)TryFindResource("PoolButtonStyle");
+                    // 3.77.0-snapshot-7：默认（纯文本）卡片同样按缩略图设置里的圆角渲染
+                    double textRadius = PoolCover.GetThumbRadius(pool.Dir);
+                    SetCardRadius(btn, new CornerRadius(textRadius));
+                    btn.ApplyTemplate();
+                }
+
                 btn.Click += BtnPool_Click;
                 AttachTouchContextMenu(btn);
                 btn.ContextMenu = BuildPoolContextMenu(i);
+                SetIsSelected(btn, i == _currentPoolIndex);
                 PoolButtonsPanel.Children.Add(btn);
             }
 
             // 3.33：卡池列表重建后，其它主界面按钮也按当前背景模糊开关刷新样式
             ApplyAcrylicButtons(App.MainBackgroundBlur);
+
+            // 3.77.0-snapshot-4：记下这次建卡用的缩略图设置，之后有变化就要重建
+            _lastThumbSignature = ComputeThumbSignature();
         }
 
-        private static object BuildPoolButtonContent(PoolInfo pool)
+        /// <summary>3.77.0-snapshot-4：把所有卡池的缩略图设置拼成一个字符串，用来比较是否变了。</summary>
+        private string ComputeThumbSignature()
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var p in _allPools)
+                {
+                    sb.Append(PoolCover.GetThumbMode(p.Dir)).Append(':')
+                      .Append(PoolCover.GetThumbRadius(p.Dir).ToString("0.#")).Append(':')
+                      .Append(PoolCover.GetThumbShowText(p.Dir) ? '1' : '0').Append(':')
+                      .Append(PoolCover.GetThumbTextColor(p.Dir)?.ToString() ?? "-").Append(';');
+                }
+                return sb.ToString();
+            }
+            catch { return ""; }
+        }
+
+        private object BuildPoolButtonContent(PoolInfo pool)
         {
             string displayText = pool?.UniqueName ?? "";
             bool isLocked = pool != null && pool.IsLocked;
@@ -1639,8 +1680,306 @@ namespace RandomDrawer
                 Margin = new Thickness(0, 4, 0, 4)
             };
 
+            try
+            {
+                if (pool != null && !string.IsNullOrEmpty(pool.Dir))
+                {
+                    Color? custom = PoolCover.GetThumbTextColor(pool.Dir);
+                    if (custom.HasValue) textBlock.Foreground = new SolidColorBrush(custom.Value);
+                }
+            }
+            catch { }
+
             dock.Children.Add(textBlock);
             return dock;
+        }
+
+        /// <summary>3.77：铺满卡片的缩略图内容（名字可选，锁图标在右上角）。</summary>
+        private FrameworkElement BuildPoolThumbContent(PoolInfo pool, string displayText, bool isLocked)
+        {
+            var layout = new Grid { ClipToBounds = true };
+
+            bool showText = PoolCover.GetThumbShowText(pool.Dir);
+            if (showText)
+            {
+                var textBlock = new TextBlock
+                {
+                    Text = displayText,
+                    FontSize = 16,
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextAlignment = TextAlignment.Center,
+                    Margin = new Thickness(8, 4, 8, 4),
+                    Foreground = new SolidColorBrush(PoolCover.GetThumbTextColor(pool.Dir)
+                        ?? (ThemeManager.GetBrush("Fg_333333") is SolidColorBrush b ? b.Color : Color.FromRgb(0x33, 0x33, 0x33))),
+                    // 3.78（snapshot-3）：卡片上的卡池名不再加文字阴影
+                };
+                layout.Children.Add(textBlock);
+            }
+
+            if (isLocked)
+            {
+                var lockIcon = new TextBlock
+                {
+                    Text = "\uE72E",
+                    FontFamily = App.IconFontFamily,
+                    FontSize = 13,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, 4, 6, 0),
+                    Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 6, ShadowDepth = 0, Opacity = 0.8 },
+                };
+                layout.Children.Add(lockIcon);
+            }
+
+            return layout;
+        }
+
+        // ---------------------------------------------------------------------
+        // 3.77：卡片缩略图的整卡圆角 / 悬浮主题框 / 选中呼吸渐变
+        // ---------------------------------------------------------------------
+
+        public static readonly DependencyProperty CardRadiusProperty = DependencyProperty.RegisterAttached(
+            "CardRadius", typeof(CornerRadius), typeof(MainPage_UC), new PropertyMetadata(new CornerRadius(0)));
+
+        public static void SetCardRadius(UIElement element, CornerRadius value) => element.SetValue(CardRadiusProperty, value);
+        public static CornerRadius GetCardRadius(UIElement element) => (CornerRadius)element.GetValue(CardRadiusProperty);
+
+        public static readonly DependencyProperty CardBorderBrushProperty = DependencyProperty.RegisterAttached(
+            "CardBorderBrush", typeof(Brush), typeof(MainPage_UC), new PropertyMetadata(null));
+
+        public static void SetCardBorderBrush(UIElement element, Brush value) => element.SetValue(CardBorderBrushProperty, value);
+        public static Brush? GetCardBorderBrush(UIElement element) => (Brush?)element.GetValue(CardBorderBrushProperty);
+
+        /// <summary>缩略图卡片的选中呼吸渐变：深蓝 → 主题色 → 深蓝。</summary>
+        private static readonly Color CardPulseDark = Color.FromRgb(0x00, 0x4F, 0x9E);
+
+        private Color AccentColor()
+        {
+            try
+            {
+                if (ThemeManager.GetBrush("Ui.AccentFill") is SolidColorBrush sb) return sb.Color;
+            }
+            catch { }
+            return Color.FromRgb(0x00, 0x78, 0xD7);
+        }
+
+        /// <summary>缩略图卡片：返回 true 表示已经按缩略图样式装配好这个按钮。</summary>
+        private bool TryBuildThumbCard(Button btn, PoolInfo pool, int index)
+        {
+            try
+            {
+                if (pool == null || string.IsNullOrEmpty(pool.Dir)) return false;
+                if (PoolCover.GetThumbMode(pool.Dir) == PoolCover.ThumbMode.Default) return false;
+
+                BitmapSource? thumb = LoadPoolThumb(pool);
+                if (thumb == null) return false;
+
+                Style? thumbStyle = (Style?)TryFindResource("ThumbPoolButtonStyle");
+                if (thumbStyle != null) btn.Style = thumbStyle;
+                btn.Padding = new Thickness(0);
+                // 3.78：按图片比例自适应高度、宽度跟列表走，用 Uniform 保证整张图都在卡片里（不裁剪）
+                btn.Background = new ImageBrush(thumb) { Stretch = Stretch.Uniform };
+                btn.Content = BuildPoolThumbContent(pool, pool.UniqueName ?? "", pool.IsLocked);
+
+                // 3.77.0-snapshot-6：Border 只把「边框」画成圆角，Background 的图片不会被裁成圆角，
+                // 所以整卡圆角还要给按钮加几何裁剪，缩略图才会真正变成圆角卡片。
+                double radius = PoolCover.GetThumbRadius(pool.Dir);
+
+                // 3.77.0-snapshot-7：卡片高度只按「列表可用宽度」算一次，不再跟着自身尺寸反复重算 ——
+                // 否则高度变化会让滚动条出现/消失、列表宽度来回变，返回主页时整个列表会抽搐。
+                double availWidth = GetPoolListAvailableWidth();
+                ApplyCardImageSize(btn, thumb, availWidth);
+                ApplyCardClip(btn, radius);
+                // 3.77.0-snapshot-9：卡片的 SizeChanged 只更新圆角裁剪，绝不再改高度。
+                // 之前按卡片实际宽度重算高度，滚动条出现→宽度变→高度变→内容高度变→滚动条消失…
+                // 来回震荡，主页看起来一直在抽搐。
+                // 3.77.0-snapshot-15：但首次构建时列表宽度可能还是 0（回退成 154），高度算矮了 →
+                // Uniform 缩放后图片宽度不足、卡片左右留透明带。这里改成用「列表可用宽度」重算高度：
+                // 可用宽度与卡片自身高度无关，不会形成自反馈，既能纠正首次偏差也不会抽搐。
+                btn.SizeChanged += (s, e) =>
+                {
+                    ApplyCardImageSize(btn, thumb, GetPoolListAvailableWidth());
+                    ApplyCardClip(btn, radius);
+                };
+
+                SetCardRadius(btn, new CornerRadius(radius));
+
+                var borderBrush = new SolidColorBrush(GetIdleBorderColor());
+                SetCardBorderBrush(btn, borderBrush);
+
+                btn.MouseEnter += (s, e) => SetCardHover(btn, true);
+                btn.MouseLeave += (s, e) => SetCardHover(btn, false);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error(ex, "主页：构建卡池缩略图卡片失败");
+                return false;
+            }
+        }
+
+        private Color GetIdleBorderColor()
+        {
+            try
+            {
+                if (ThemeManager.GetBrush("Bd_CCCCCC") is SolidColorBrush sb) return sb.Color;
+            }
+            catch { }
+            return Color.FromRgb(0xCC, 0xCC, 0xCC);
+        }
+
+        /// <summary>3.77.0-snapshot-6：给缩略图卡片的「图片层」加圆角裁剪 ——
+        /// Border 的 CornerRadius 不裁背景图片，而直接裁整个按钮又会把选中 / 悬浮边框的四个角切掉，
+        /// 所以裁剪只作用在模板里的 CardBg（图片层）上，边框层保持完整。</summary>
+        private static void ApplyCardClip(FrameworkElement card, double radius)
+        {
+            try
+            {
+                if (card == null) return;
+
+                FrameworkElement? target = card;
+                if (card is Button btn)
+                {
+                    try { btn.ApplyTemplate(); } catch { }
+                    // 3.77.0-snapshot-7：只裁模板里的图片层；模板里没有 CardBg 时宁可不裁，
+                    // 也不要去裁按钮本身（裁按钮会把选中 / 悬浮边框的四个圆角切掉）。
+                    if (btn.Template?.FindName("CardBg", btn) is FrameworkElement bg) target = bg;
+                    else return;
+                }
+
+                double w = target.ActualWidth;
+                double h = target.ActualHeight;
+                if (w <= 0.5 || h <= 0.5) return;
+                if (radius <= 0.5)
+                {
+                    target.Clip = null;
+                    return;
+                }
+                double r = Math.Min(radius, Math.Min(w, h) / 2);
+                target.Clip = new RectangleGeometry(new Rect(0, 0, w, h), r, r);
+            }
+            catch { }
+        }
+
+        /// <summary>3.78：缩略图卡片的高度按图片比例算，宽度跟随卡池列表宽度，不裁剪图片。</summary>
+        private static void ApplyCardImageSize(FrameworkElement card, BitmapSource thumb, double availableWidth)
+        {
+            try
+            {
+                if (thumb == null || thumb.PixelWidth <= 0) return;
+                double width = availableWidth > 1 ? availableWidth : 154;
+                double height = Math.Max(46, width * thumb.PixelHeight / thumb.PixelWidth);
+                if (Math.Abs(card.Height - height) < 0.5) return;
+                card.Height = height;
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-7：卡池列表可用宽度（已扣掉右侧留白与常驻滚动条）。</summary>
+        private double GetPoolListAvailableWidth()
+        {
+            try
+            {
+                // 3.77.0-snapshot-10：以列表内容面板的真实宽度为准。
+                // 之前用 ScrollViewer.ActualWidth - 30 估，估小了 → 高度算矮 → Uniform 缩放后
+                // 图片宽度不足，卡片左右各留一条透明带。
+                if (PoolButtonsPanel != null && PoolButtonsPanel.ActualWidth > 1)
+                    return Math.Max(60, PoolButtonsPanel.ActualWidth);
+                if (PoolScrollViewer != null && PoolScrollViewer.ViewportWidth > 1)
+                    return Math.Max(60, PoolScrollViewer.ViewportWidth - 10);
+            }
+            catch { }
+            return 154;
+        }
+
+        private static void SetCardHover(Button btn, bool hover)
+        {
+            try
+            {
+                if (GetIsSelected(btn)) return;
+                if (GetCardBorderBrush(btn) is not SolidColorBrush brush) return;
+
+                Color idle = Color.FromRgb(0xCC, 0xCC, 0xCC);
+                try
+                {
+                    if (ThemeManager.GetBrush("Bd_CCCCCC") is SolidColorBrush idleBrush) idle = idleBrush.Color;
+                }
+                catch { }
+
+                Color accent = Color.FromRgb(0x00, 0x78, 0xD7);
+                try
+                {
+                    if (ThemeManager.GetBrush("Ui.AccentFill") is SolidColorBrush accentBrush) accent = accentBrush.Color;
+                }
+                catch { }
+
+                brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+                brush.Color = hover ? accent : idle;
+                btn.BorderThickness = new Thickness(hover ? 1.6 : 1);
+            }
+            catch { }
+        }
+
+        private static void ApplyCardSelection(Button btn, bool selected)
+        {
+            try
+            {
+                if (btn.Background is not ImageBrush) return;
+                if (GetCardBorderBrush(btn) is not SolidColorBrush brush) return;
+
+                Color accent = Color.FromRgb(0x00, 0x78, 0xD7);
+                try
+                {
+                    if (ThemeManager.GetBrush("Ui.AccentFill") is SolidColorBrush accentBrush) accent = accentBrush.Color;
+                }
+                catch { }
+
+                brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+                if (selected)
+                {
+                    var anim = new ColorAnimation
+                    {
+                        From = CardPulseDark,
+                        To = accent,
+                        Duration = TimeSpan.FromMilliseconds(1400),
+                        AutoReverse = true,
+                        RepeatBehavior = RepeatBehavior.Forever,
+                    };
+                    brush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+                    btn.BorderThickness = new Thickness(2);
+                }
+                else
+                {
+                    Color idle = Color.FromRgb(0xCC, 0xCC, 0xCC);
+                    try
+                    {
+                        if (ThemeManager.GetBrush("Bd_CCCCCC") is SolidColorBrush idleBrush) idle = idleBrush.Color;
+                    }
+                    catch { }
+                    brush.Color = idle;
+                    btn.BorderThickness = new Thickness(1);
+                }
+            }
+            catch { }
+        }
+
+        private BitmapSource? LoadPoolThumb(PoolInfo pool)
+        {
+            try
+            {
+                string path = PoolCover.GetThumbDisplayPath(pool.Dir);
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+                return ImageHelper.LoadBitmapSized(path, 260);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error(ex, "主页：加载卡池缩略图失败");
+                return null;
+            }
         }
 
         private void DrawDetail_Click(object sender, RoutedEventArgs e) => ShowDrawDetailDialog();
@@ -1701,6 +2040,11 @@ namespace RandomDrawer
                     {
                         if (btn.ContextMenu == null) return;
                         btn.ContextMenu.PlacementTarget = btn;
+                        // 3.77.0-snapshot-9：长按没有鼠标坐标，默认 MousePoint 会落到左上角，
+                        // 这里固定在卡片正下方弹出。
+                        btn.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                        btn.ContextMenu.HorizontalOffset = 12;
+                        btn.ContextMenu.VerticalOffset = -8;
                         btn.ContextMenu.IsOpen = true;
                     }
                     catch { }
@@ -2100,6 +2444,20 @@ namespace RandomDrawer
                         PoolCover.SaveOverlay(dir, "");
                     PoolCover.SetBlurBackground(dir, msg.BlurBackground);
                     PoolCover.SetRoundCover(dir, msg.RoundCover);
+                    // 3.77：封面 / 批注变了，卡片用的自动缩略图缓存要作废
+                    PoolCover.InvalidateAutoThumb(dir);
+
+                    // 3.77.0-snapshot-7：使用「原封面缩略图」时，保存后立刻把「封面 + 批注」合成成一张图
+                    // 写进卡池目录（cover_thumb_auto.png），主界面卡片与之后的启动都直接读这张合并图。
+                    if (PoolCover.GetThumbMode(dir) == PoolCover.ThumbMode.Cover)
+                    {
+                        try
+                        {
+                            string merged = PoolCover.EnsureAutoThumb(dir);
+                            RuntimeLog.Info("主页：已重建合并缩略图=" + (string.IsNullOrEmpty(merged) ? "失败" : System.IO.Path.GetFileName(merged)));
+                        }
+                        catch { }
+                    }
 
                     var pool = _allPools.FirstOrDefault(p => SamePath(p.Dir, dir));
                     if (pool != null)
@@ -2115,6 +2473,8 @@ namespace RandomDrawer
                     }
 
                     MessageBus.Publish(new AppMessages.PoolListChanged());
+                    // 3.77.0-snapshot-7：不再在这里额外直接刷一次 —— 订阅在离开主页时不会被退订，
+                    // 消息能收到；重复刷新会让列表连续重建两次，返回主页时看起来在抽搐。
                 }
                 catch (Exception ex)
                 {
@@ -4146,12 +4506,12 @@ namespace RandomDrawer
                         if (upSet.Count == 0 && !string.IsNullOrEmpty(gs.BAUp3Star)) upSet.Add(gs.BAUp3Star.Trim());
                     }
 
-                    string historyFile = Path.Combine(pool.Dir, "history.txt");
-                    if (File.Exists(historyFile))
+                    // 3.77.0-snapshot-19：历史可能拆成多个分片，用流式枚举逐个分片统计（读完即释放）
+                    if (HistoryFiles.AnyExists(pool.Dir))
                     {
                         try
                         {
-                            foreach (var line in File.ReadAllLines(historyFile))
+                            foreach (var line in HistoryFiles.EnumerateLines(pool.Dir))
                             {
                                 if (string.IsNullOrWhiteSpace(line)) continue;
                                 var parts = line.Split('|');
@@ -4264,8 +4624,7 @@ namespace RandomDrawer
                 {
                     if (BtnAdvancedStats != null) BtnAdvancedStats.Visibility = Visibility.Collapsed;
                     int count = 0;
-                    string historyFile = Path.Combine(pool.Dir, "history.txt");
-                    if (File.Exists(historyFile)) { try { count = File.ReadAllLines(historyFile).Length; } catch { count = 0; } }
+                    try { if (HistoryFiles.AnyExists(pool.Dir)) count = (int)Math.Min(int.MaxValue, HistoryFiles.CountTotalLines(pool.Dir)); } catch { count = 0; }
 
                     TxtDrawCountAdvanced.Text = $"累计抽取次数：{count}";
                     TxtDrawCountAdvanced.Foreground = ThemeManager.GetBrush("Fg_000000");
@@ -4323,8 +4682,8 @@ namespace RandomDrawer
                     int count = 0;
                     if (_currentPoolIndex >= 0 && _currentPoolIndex < _allPools.Count)
                     {
-                        string historyFile = Path.Combine(_allPools[_currentPoolIndex].Dir, "history.txt");
-                        if (File.Exists(historyFile)) { try { count = File.ReadAllLines(historyFile).Length; } catch { count = 0; } }
+                        // 3.77.0-snapshot-17：历史可能拆成多个分片
+                        try { if (HistoryFiles.AnyExists(_allPools[_currentPoolIndex].Dir)) count = (int)Math.Min(int.MaxValue, HistoryFiles.CountTotalLines(_allPools[_currentPoolIndex].Dir)); } catch { count = 0; }
                     }
                     TxtDrawCountNormal.Text = $"累计抽取次数：{count}";
                 }
@@ -4771,6 +5130,14 @@ namespace RandomDrawer
             session.UseAnimation = _shouldShowAnimationCheckbox
                                 && ChkDrawAnimation?.IsChecked == true;
 
+            // ★ 3.77.0-snapshot-17：只有「开启实验性开关 + 次数 > 9999 + 关闭不重复抽取」才走独立批量路径，
+            //   其余情况完全沿用原有 PerformDraw。
+            // ★ 3.77.0-snapshot-18：高级抽卡规则（蔚蓝档案 / 星铁等）有自己的保底与状态机，
+            //   批量路径会绕过它们，因此启用高级规则的卡池一律不走批量路径，也不放开上限。
+            bool advancedRules = Engine.HasActiveGachaStrategy(pool.Dir);
+            bool unlimitedPath = App.UnlimitedDrawCount && !advancedRules && count > 9999 && session.NoRepeat == false;
+            if (unlimitedPath) session.UseAnimation = false;
+
             DrawSession.Current = session;
             RuntimeLog.Info($"抽取参数：卡池={pool.UniqueName}，条目={pool.ItemCount}，次数={count}，不重复={session.NoRepeat}，动画={session.UseAnimation}，展示模式={session.DisplayMode}");
 
@@ -4782,7 +5149,13 @@ namespace RandomDrawer
             List<DrawResultData> results;
             try
             {
-                if (heavyWork)
+                if (unlimitedPath)
+                {
+                    win?.ShowDrawBusy("正在抽取中，请稍候...");
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                    results = await Task.Run(() => session.PerformDrawUnlimited(count));
+                }
+                else if (heavyWork)
                 {
                     if (showBusy) win?.ShowDrawBusy("正在抽取中，请稍候...");
                     await Dispatcher.Yield(DispatcherPriority.Background);
@@ -4821,7 +5194,8 @@ namespace RandomDrawer
             else
             {
                 MessageBus.Publish(new AppMessages.OpenDrawResultPage(
-                    results, pool.Dir, count, session.Pers, session.Highlight, session.DisplayMode));
+                    results, pool.Dir, count, session.Pers, session.Highlight, session.DisplayMode,
+                    unlimitedPath ? session.TotalDrawn : 0));
                 MessageBus.Publish(new AppMessages.NavigateTo("DrawResultPage"));
             }
 
@@ -4924,7 +5298,15 @@ namespace RandomDrawer
             var pool = _allPools[_currentPoolIndex];
             if (pool.Items.Count == 0) return;
 
-            int? picked = await win.ShowDrawCountPanelAsync(10);
+            // ★ 3.77.0-snapshot-18：高级抽卡规则卡池保持 1~9999，避免规则被批量路径绕过
+            bool advancedRules = Engine.HasActiveGachaStrategy(pool.Dir);
+            if (advancedRules && App.UnlimitedDrawCount)
+            {
+                // 开关开着但当前卡池有高级规则时，明确告诉用户为什么上限还是 9999
+                ToastNotification.ShowWarning(win, "该卡池启用了高级抽卡规则，最多 9999 次。");
+            }
+            int panelMax = (App.UnlimitedDrawCount && !advancedRules) ? int.MaxValue : 9999;
+            int? picked = await win.ShowDrawCountPanelAsync(10, panelMax);
             if (picked == null)
             {
                 // ★ 修复：如果在输入面板上直接点击了取消，面板在关闭时可能已经恢复过，这里防御性调用一次（由于状态一致会直接返回，不会重复播放动画）

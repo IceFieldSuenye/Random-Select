@@ -258,7 +258,10 @@ namespace RandomDrawer
                 string name = null;
                 foreach (var n in asm.GetManifestResourceNames())
                 {
-                    if (n.EndsWith("更新日志.txt", StringComparison.OrdinalIgnoreCase)) { name = n; break; }
+                    // 3.77.0-snapshot-13：更新日志改用 Markdown 扩展名（Agent\更新日志.md），
+                // 这里同时兼容旧的 .txt，避免历史发布版或测试替身读不到。
+                    if (n.EndsWith("更新日志.md", StringComparison.OrdinalIgnoreCase)
+                        || n.EndsWith("更新日志.txt", StringComparison.OrdinalIgnoreCase)) { name = n; break; }
                 }
                 if (name == null) return list;
 
@@ -272,7 +275,8 @@ namespace RandomDrawer
 
             if (string.IsNullOrEmpty(text)) return list;
 
-            var versionRegex = new Regex(@"^(\d+(?:\.\d+)+)（(.+?)）\s*(\d{4}-\d{2}-\d{2})", RegexOptions.Compiled);
+            // 3.77：版本号允许带预发布后缀（如 3.77.0-snapshot-1），否则该条目会被整段跳过。
+            var versionRegex = new Regex(@"^(\d+(?:\.\d+)+(?:-[0-9A-Za-z][0-9A-Za-z.\-]*)?)（(.+?)）\s*(\d{4}-\d{2}-\d{2})", RegexOptions.Compiled);
             var itemRegex = new Regex(@"^\d+\s*[\.、]\s*(.+)$", RegexOptions.Compiled);
             // 3.76.11：识别「一、新增内容。」这类分节标题和「 - 子项」，应用内按原文分层显示
             var sectionRegex = new Regex(@"^[一二三四五六七八九十]+、\s*(.+)$", RegexOptions.Compiled);

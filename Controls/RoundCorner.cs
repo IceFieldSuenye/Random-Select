@@ -5,7 +5,7 @@ using System.Windows.Media;
 namespace RandomDrawer
 {
     /// <summary>
-    /// 封面圆角裁剪：给「承载封面的控件」套上统一 12px 的圆角裁剪。
+    /// 封面圆角裁剪：给「承载封面的控件」套上圆角裁剪（3.77.0-snapshot-6 起半径可调，默认 12px）。
     ///
     /// 只裁静态图是不够的：视频（MediaElement）和 GIF（逐帧 Image）都在同一个承载控件里，
     /// 所以这里裁的是承载控件本身（Clip + 尺寸变化时重算），三种媒体一起生效。
@@ -13,8 +13,13 @@ namespace RandomDrawer
     /// </summary>
     public static class RoundCorner
     {
-        /// <summary>圆角半径（与需求约定一致：12px）。</summary>
+        /// <summary>默认圆角半径（与历史需求约定一致：12px）。</summary>
         public const double Radius = 12;
+
+        /// <summary>当前圆角半径（每个控件各自一份，跟随「圆角大小」滑块）。</summary>
+        public static readonly DependencyProperty RadiusValueProperty =
+            DependencyProperty.RegisterAttached("RadiusValue", typeof(double), typeof(RoundCorner),
+                new PropertyMetadata(Radius));
 
         /// <summary>当前是否已挂上尺寸监听。</summary>
         private static readonly DependencyProperty HookedProperty =
@@ -31,10 +36,16 @@ namespace RandomDrawer
             DependencyProperty.RegisterAttached("ContentSize", typeof(Size), typeof(RoundCorner),
                 new PropertyMetadata(Size.Empty));
 
-        /// <summary>设置圆角开关；控件尺寸变化时自动重算裁剪区域。</summary>
+        /// <summary>设置圆角开关（使用默认半径）；控件尺寸变化时自动重算裁剪区域。</summary>
         public static void SetEnabled(FrameworkElement host, bool enabled)
         {
-            Attach(host, enabled, Size.Empty, false);
+            Attach(host, enabled, Size.Empty, false, Radius);
+        }
+
+        /// <summary>3.77.0-snapshot-6：设置圆角开关并指定半径（0 = 不裁剪）。</summary>
+        public static void SetEnabled(FrameworkElement host, bool enabled, double radius)
+        {
+            Attach(host, enabled, Size.Empty, false, radius);
         }
 
         /// <summary>
@@ -44,10 +55,16 @@ namespace RandomDrawer
         /// </summary>
         public static void SetEnabledForContent(FrameworkElement host, bool enabled, Size contentSize)
         {
-            Attach(host, enabled, contentSize, true);
+            Attach(host, enabled, contentSize, true, Radius);
         }
 
-        private static void Attach(FrameworkElement host, bool enabled, Size contentSize, bool requireContent)
+        /// <summary>3.77.0-snapshot-6：同上，但圆角半径可调。</summary>
+        public static void SetEnabledForContent(FrameworkElement host, bool enabled, Size contentSize, double radius)
+        {
+            Attach(host, enabled, contentSize, true, radius);
+        }
+
+        private static void Attach(FrameworkElement host, bool enabled, Size contentSize, bool requireContent, double radius)
         {
             if (host == null) return;
 
@@ -55,6 +72,7 @@ namespace RandomDrawer
             {
                 host.SetValue(ContentSizeProperty, contentSize);
                 host.SetValue(RequireContentProperty, requireContent);
+                host.SetValue(RadiusValueProperty, Math.Max(0, Math.Min(64, radius)));
 
                 bool hooked = (bool)host.GetValue(HookedProperty);
                 if (enabled && !hooked)
@@ -82,17 +100,19 @@ namespace RandomDrawer
         {
             try
             {
-                if (!enabled)
+                double radiusValue = (double)host.GetValue(RadiusValueProperty);
+                if (!enabled || radiusValue <= 0.5)
                 {
                     host.Clip = null;
                     return;
                 }
 
-                double w = host.ActualWidth;
-                double h = host.ActualHeight;
+                double w = host.ActualWidth > 0 ? host.ActualWidth : host.Width;
+                double h = host.ActualHeight > 0 ? host.ActualHeight : host.Height;
+                if (double.IsNaN(w) || double.IsNaN(h)) { w = 0; h = 0; }
                 if (w <= 0 || h <= 0)
                 {
-                    // 还没排版：清掉旧裁剪，等 SizeChanged 再补
+                    // 还没排版也拿不到显式尺寸：清掉旧裁剪，等 SizeChanged 再补
                     host.Clip = null;
                     return;
                 }
@@ -121,7 +141,7 @@ namespace RandomDrawer
                 }
 
                 // 半径不能超过短边的一半，否则 RectangleGeometry 会画出异常形状
-                double radius = Math.Min(Radius, Math.Min(rect.Width, rect.Height) / 2.0);
+                double radius = Math.Min(radiusValue, Math.Min(rect.Width, rect.Height) / 2.0);
                 host.Clip = new RectangleGeometry(rect, radius, radius);
             }
             catch { }

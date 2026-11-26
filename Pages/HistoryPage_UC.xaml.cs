@@ -31,6 +31,8 @@ namespace RandomDrawer
         private int _totalPages = 1;
         /// <summary>每页条数（分页查看）：一页 10 条本来就不会卡，低性能模式不再缩减它。</summary>
         private const int PageSize = 10;
+        /// <summary>3.77.0-snapshot-19：大批量显示每页 1 万条（仍然分页，不会整份载入内存）。</summary>
+        private const int BulkPageSize = 10000;
 
         // ---- 3.60：全部显示 + 低性能模式 → 分批渲染，滚到底自动加载下一批 ----
         /// <summary>每批渲染的行数（只有低性能模式才分批）。</summary>
@@ -218,10 +220,6 @@ namespace RandomDrawer
                 RestoreLastSelection();
             }));
         }
-
-        // 历史记录行缓存：同一个文件（时间戳/大小未变）不重复读取与反转
-        private List<string> _cachedLines;
-        private string _cachedLinesKey;
 
         // 重建卡池下拉框时屏蔽选择事件，避免反复触发整页解析
         private bool _suppressPoolSelection;
@@ -415,85 +413,44 @@ namespace RandomDrawer
 
             LoadRealHeaders();
 
-            string historyFile = Path.Combine(_currentPoolDir, "history.txt");
-            if (!File.Exists(historyFile)) { ShowEmptyPage(); return; }
+            if (!HistoryFiles.AnyExists(_currentPoolDir)) { ShowEmptyPage(); return; }
 
-            List<string> allLines;
-            string cacheKey = "";
-            try
-            {
-                var info = new FileInfo(historyFile);
-                cacheKey = _currentPoolDir + "|" + info.LastWriteTimeUtc.Ticks + ":" + info.Length;
-            }
-            catch { }
+            int pageSize = _showAll ? BulkPageSize : PageSize;
 
-            bool fromCache = _cachedLines != null && !string.IsNullOrEmpty(cacheKey) && _cachedLinesKey == cacheKey;
-            if (fromCache)
-            {
-                allLines = _cachedLines;
-            }
-            else
-            {
-                try { allLines = File.ReadAllLines(historyFile).Reverse().ToList(); }
-                catch (Exception ex)
-                {
-                    RuntimeLog.Error(ex, $"读取历史记录失败：{historyFile}");
-                    ShowEmptyPage();
-                    return;
-                }
-                _cachedLines = allLines;
-                _cachedLinesKey = cacheKey;
-            }
-            RuntimeLog.Info($"读取历史记录：卡池={_currentPoolDir}，总行数={allLines.Count}，页码={_currentPage}，搜索={_historySearchText}");
+            long total;
+            try { total = HistoryFiles.CountTotalLines(_currentPoolDir); }
+            catch { ShowEmptyPage(); return; }
 
-            if (allLines.Count == 0) { ShowEmptyPage(); return; }
+            if (total <= 0) { ShowEmptyPage(); return; }
 
             SetEmptyStateVisible(false);
 
             // ★ 启用重置按钮
             if (BtnReset != null) BtnReset.IsEnabled = true;
 
-            int pageSize = _showAll ? Math.Max(1, allLines.Count) : PageSize;
-            _totalPages = _showAll ? 1 : (int)Math.Ceiling((double)allLines.Count / PageSize);
-            if (_totalPages == 0) _totalPages = 1;
+            _totalPages = (int)Math.Max(1, (total + pageSize - 1) / pageSize);
             if (_currentPage > _totalPages) _currentPage = _totalPages;
             if (_currentPage < 1) _currentPage = 1;
 
-            // 3.60：全部显示 + 低性能模式先只渲染前 300 行，滚到底再自动追加（分页查看保持 10 条不变）
-            _showAllLines = _showAll ? allLines : null;
+            // 3.77.0-snapshot-19：一次只读取当前页相交的分片，不再把整份历史读进内存；
+            // 其余分片按「非最后一个必定写满 10 000 行」估算，老版本的根目录文件仍精确计数。
+            _showAllLines = null;
             _showAllRenderedCount = 0;
             _showAllAppending = false;
 
-            List<string> pageLines;
-            if (_showAll && App.LowEndMode && allLines.Count > ShowAllBatchSize)
-            {
-                int take = ShowAllBatchSize;
-                pageLines = allLines.Take(take).ToList();
-                _showAllRenderedCount = take;
-            }
-            else
-            {
-                pageLines = _showAll
-                    ? allLines.ToList()
-                    : allLines.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
-                _showAllRenderedCount = pageLines.Count;
-            }
-
-            // 只有「第一次真正读文件」且数据量大时才显示加载遮罩；
-            // 翻页走缓存，再闪一次遮罩会很难看。
-            // 全部显示 + 低性能模式只解析一批，行数不多就不用挂遮罩
-            bool heavy = (!fromCache && allLines.Count > 2000)
-                         || (_showAll && pageLines.Count > 500);
+            // 数据量大、或当前页本身就很大（大批量显示每页 1 万条）时挂加载遮罩
+            bool heavy = total > 2000 || pageSize > 500;
             if (heavy) ShowLoadingOverlay(true);
 
-            var linesSnapshot = pageLines;
-            System.Threading.Tasks.Task.Run(() => ParseRows(linesSnapshot))
+            int page = _currentPage;
+            System.Threading.Tasks.Task.Run(() => HistoryFiles.ReadPageLines(_currentPoolDir, page, pageSize))
                 .ContinueWith(task =>
                 {
-                    var parsed = task.IsFaulted
-                        ? (Rows: new List<Tuple<string, string, List<string>, string>>(), MaxCols: 0)
+                    var pageLines = task.IsFaulted || task.IsCanceled
+                        ? new List<string>()
                         : task.Result;
 
+                    var parsed = ParseRows(pageLines);
                     try
                     {
                         Dispatcher.BeginInvoke(new Action(() =>
@@ -926,11 +883,11 @@ namespace RandomDrawer
             try
             {
                 // 按钮显示的是「点一下会切换到的模式」，而不是当前模式
-                if (TxtViewMode != null) TxtViewMode.Text = _showAll ? "按页查看" : "全部显示";
+                if (TxtViewMode != null) TxtViewMode.Text = _showAll ? "按页查看" : "大批量显示";
                 if (TxtViewModeIcon != null) TxtViewModeIcon.Text = _showAll ? "\uE7C3" : "\uE8FD";
 
-                // 全部显示模式：隐藏下方翻页按钮与页码
-                if (PagerPanel != null) PagerPanel.Visibility = _showAll ? Visibility.Collapsed : Visibility.Visible;
+                // 3.77.0-snapshot-19：两种模式都是分页显示，翻页条常驻
+                if (PagerPanel != null) PagerPanel.Visibility = Visibility.Visible;
             }
             catch { }
         }
@@ -1137,8 +1094,12 @@ namespace RandomDrawer
                     "确认", MessageBoxButton.YesNo, MessageBoxImage.Question, yesText: "清空", yesIcon: "\uE74D", noIcon: "\uE711") != MessageBoxResult.Yes)
                 return;
 
-            string historyFile = Path.Combine(_currentPoolDir, "history.txt");
-            if (File.Exists(historyFile)) File.Delete(historyFile);
+            // 3.77.0-snapshot-17：清空时删除全部分片（History\history1.txt / history2.txt …）
+            foreach (string shard in HistoryFiles.EnumerateShards(_currentPoolDir))
+            {
+                try { if (File.Exists(shard)) File.Delete(shard); } catch { }
+            }
+            HistoryFiles.InvalidateCache();
 
             if (isAdvanced)
             {

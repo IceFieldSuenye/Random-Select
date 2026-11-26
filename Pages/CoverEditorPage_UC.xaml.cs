@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -63,7 +64,8 @@ namespace RandomDrawer
 
         private readonly Stack<EditAction> _undo = new Stack<EditAction>();
         private readonly Stack<EditAction> _redo = new Stack<EditAction>();
-        private readonly List<HintBubble> _toolHints = new List<HintBubble>();
+        private readonly Stack<EditAction> _thumbUndo = new Stack<EditAction>();
+        private readonly Stack<EditAction> _thumbRedo = new Stack<EditAction>();
 
         private ToolMode _mode = ToolMode.Text;
         private Color _textColor = Color.FromRgb(0x33, 0x33, 0x33);
@@ -90,6 +92,16 @@ namespace RandomDrawer
         private bool _isVideo;
         /// <summary>3.34：圆角封面开关（从页面底部的复选框改成顶部「样式」功能区的圆角 / 方角按钮）。</summary>
         private bool _roundCover;
+
+        /// <summary>3.77.0-snapshot-6：封面圆角半径（0 = 方角，默认 9）。</summary>
+        private double _coverRadius;
+
+        /// <summary>3.77.0-snapshot-6：「圆角大小」气泡当前改的是封面圆角还是卡片圆角。</summary>
+        private enum RadiusTarget { Cover, Thumb }
+        private RadiusTarget _radiusTarget = RadiusTarget.Cover;
+        private Button? _radiusPopupAnchor;
+        private double _radiusBeforeOpen = 9;
+        private bool _radiusSync;
         private double _coverAspect = 16.0 / 9.0;
 
         // 缩放
@@ -138,6 +150,18 @@ namespace RandomDrawer
         private Point _selectDragStart;
         /// <summary>正在拖动选框里的像素。</summary>
         private bool _selectMoving;
+
+        // 3.77.0-snapshot-5：选区旋转（和文本框的旋转把手同一套交互）
+        private Border? _selRotateHandle;
+        private bool _selRotating;
+        private Point _selRotateCenter;
+        private double _selRotateStartMouseAngle;
+        private double _selRotateAccum;
+        private byte[]? _selRotateSnapshot;
+        private BitmapSource? _selRotateBlock;
+        private Image? _selRotateGhost;
+        private Int32Rect _selRotateBlockRect;
+        private Rect _selRotateStartRect;
         private Point _selectMoveStart;
         private Rect _selectMoveRect;
         /// <summary>拖动开始时的整张位图（每帧先恢复它，再画提起的那块）。</summary>
@@ -148,6 +172,7 @@ namespace RandomDrawer
 
         /// <summary>内部剪贴板：复制 / 剪切下来的选区位图。</summary>
         private BitmapSource? _clipImage;
+        private DateTime _clipImageAt;   // 内部剪贴板副本的生成时间（3.77.0-snapshot-5）
 
         // 橡皮擦：正方形，边长 = 「粗细」；带一个跟随鼠标的方框提示
         private bool _erasing;
@@ -239,12 +264,16 @@ namespace RandomDrawer
 
             EnsureActiveFrame();
             EnsureEraserFrame();
-            AttachToolHints();
             ApplyMode();
             // 3.35：默认打开「文字」页签
             ShowRibbon("text", animate: false);
             // 3.37：布局完成后才知道页签宽度，这时再算一次指示条位置
-            Loaded += (s, e) => { try { UpdateTabIndicator(false); } catch { } };
+            // 3.77（snapshot-3）：切到缩略图页签时功能区会变高（多出「显示卡池名」一行），
+            // 页面下方跟着跳动 —— 这里把所有页签的第二行统一到最高那一档。
+            Loaded += (s, e) =>
+            {
+                try { UpdateTabIndicator(false); NormalizeRibbonHeight(); } catch { }
+            };
             BringTextLayerToFront();
             SetZoom(100);
 
@@ -254,6 +283,11 @@ namespace RandomDrawer
             {
                 Stage.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent,
                     new MouseButtonEventHandler(Stage_PreviewMouseDown), true);
+
+                // 3.77.0-snapshot-4：抬起同样在 Preview 阶段兜一次，
+                // 否则松手被图层消费掉后，选择工具的拖动状态会一直挂着。
+                Stage.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent,
+                    new MouseButtonEventHandler(Stage_PreviewMouseLeftButtonUp), true);
             }
             catch { }
 
@@ -336,6 +370,11 @@ namespace RandomDrawer
             _loading = true;
             _poolDir = msg.PoolDir ?? "";
             _coverPath = msg.CoverPath ?? "";
+            // 换卡池时功能区排版重新初始化，避免带着上一个卡池的滑动动画进场
+            _thumbLayoutReady = false;
+            // 缩略图预览的自动缩放也重新适配一次
+            _hasAutoFit = false;
+            _lastAutoFitSize = new Size(0, 0);
             _existingOverlayPath = "";
             try { if (!string.IsNullOrEmpty(_poolDir)) _existingOverlayPath = PoolCover.GetOverlayPath(_poolDir); } catch { }
             try
@@ -365,7 +404,12 @@ namespace RandomDrawer
             ShowRibbon("text", animate: false);
 
             // 回显当前卡池的封面样式（编辑已有卡池时不能每次打开都变回方角）
-            _roundCover = !string.IsNullOrEmpty(_poolDir) && PoolCover.IsRoundCover(_poolDir);
+            // 3.77.0-snapshot-6：圆角现在带半径，0 = 方角
+            _coverRadius = string.IsNullOrEmpty(_poolDir) ? 0 : PoolCover.GetCoverRadius(_poolDir);
+            if (_coverRadius <= 0 && !string.IsNullOrEmpty(_poolDir) && PoolCover.IsRoundCover(_poolDir)) _coverRadius = 12;
+            _roundCover = _coverRadius > 0.5;
+            _thumbRadius = string.IsNullOrEmpty(_poolDir) ? 9 : PoolCover.GetThumbRadius(_poolDir);
+            _thumbRound = _thumbRadius > 0.5;
             UpdateStyleButtons();
             if (!string.IsNullOrEmpty(_coverPath) && File.Exists(_coverPath))
             {
@@ -932,6 +976,9 @@ namespace RandomDrawer
             UpdateMediaPlayPauseVisual();
         }
 
+        /// <summary>3.77.0-snapshot-9：进「缩略图」页签时由本页签暂停的播放，切回来要恢复。</summary>
+        private bool _thumbTabPausedMedia;
+
         private void UpdateMediaPlayPauseVisual()
         {
             try
@@ -1024,6 +1071,20 @@ namespace RandomDrawer
                 return false;
             }
 
+            // 3.77.0-snapshot-5：选了「自定义缩略图」却没导入图片 —— 直接拒绝保存并说明原因
+            if (_thumbMode == PoolCover.ThumbMode.Custom)
+            {
+                string customThumb = "";
+                try { customThumb = string.IsNullOrEmpty(_poolDir) ? "" : PoolCover.GetCustomThumbPath(_poolDir); } catch { }
+                if (string.IsNullOrEmpty(customThumb) || !File.Exists(customThumb))
+                {
+                    CustomMessageBox.Show(Window.GetWindow(this),
+                        "「自定义缩略图」还没有导入图片。\n\n请先导入缩略图图片，或者把缩略图切换成「默认」「使用原封面缩略图」。",
+                        "还不能保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+            }
+
             // 3.76.10：视频带音频、且「实验性功能」未开启时，提醒保存后不会采用它的声音
             try
             {
@@ -1052,9 +1113,27 @@ namespace RandomDrawer
                 string outPath = RenderOverlay();
                 if (string.IsNullOrEmpty(outPath))
                 {
-                    CustomMessageBox.Show(Window.GetWindow(this), "保存批注图层失败。",
-                        "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return false;
+                    // 3.77.0-snapshot-14：新建卡池时卡池目录还没创建，批注层没地方落盘；
+                    // 这时不阻断保存（默认封面编辑的标记照样带回去），只记一条日志。
+                    if (string.IsNullOrEmpty(_poolDir))
+                    {
+                        RuntimeLog.Info("封面编辑页：新建卡池流程，批注层未落盘（卡池目录尚未创建），继续保存默认封面标记");
+                    }
+                    else
+                    {
+                        CustomMessageBox.Show(Window.GetWindow(this),
+                            "保存批注图层失败。\n\n可能是这个位置没有写入权限，或者磁盘已满。",
+                            "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
+                    }
+                }
+
+                // 3.77：什么都没画时不要留下全透明的批注图，
+                // 否则下次「另存为」会把这张空图当成「有批注」，一律打包成 ZIP。
+                if (!OverlayHasVisiblePixels(outPath))
+                {
+                    try { File.Delete(outPath); } catch { }
+                    outPath = "";
                 }
 
                 _dirty = false;
@@ -1063,7 +1142,7 @@ namespace RandomDrawer
                     RuntimeLog.Info("封面编辑页：保存完成"
                         + "，卡池=" + (string.IsNullOrEmpty(_poolDir) ? "-" : Path.GetFileName(_poolDir.TrimEnd('\\', '/')))
                         + "，圆角=" + (_roundCover ? "是" : "否")
-                        + "，批注层=已写入");
+                        + "，批注层=" + (string.IsNullOrEmpty(outPath) ? "无" : "已写入"));
                 }
                 catch { }
                 // 3.31：模糊背景改为「选项 → 常规 → 外观」里的全局设置，封面编辑页不再带这个开关
@@ -1125,7 +1204,11 @@ namespace RandomDrawer
             // 3.33：旧批注已经显示在 RasterLayer 里，Stage 渲染一次就是「旧批注 + 本次新内容」，
             // 不再额外合并旧 PNG（以前每次保存都会把旧批注重叠一次，看起来越存越错位）。
             BitmapSource? frame = RenderStageBitmap();
-            if (frame == null) return "";
+            if (frame == null)
+            {
+                RuntimeLog.Info("封面编辑页：批注图层渲染失败 stage=" + Stage.ActualWidth + "x" + Stage.ActualHeight);
+                return "";
+            }
 
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(frame));
@@ -1142,7 +1225,7 @@ namespace RandomDrawer
                     _existingOverlayPath = "";
                     return file;
                 }
-                catch { }
+                catch (Exception ex) { RuntimeLog.Info("封面编辑页：批注图层写入 " + dir + " 失败：" + ex.Message); }
             }
             return "";
         }
@@ -1151,14 +1234,17 @@ namespace RandomDrawer
         /// 把 Stage 上的批注（旧批注位图 + 矢量文字 / 笔迹）渲染成一张透明位图。
         /// 底图 / 视频 / 选区框 / 空状态提示都会被隐藏，不受预览缩放与圆角裁剪影响。
         /// </summary>
-        private BitmapSource? RenderStageBitmap()
+        private BitmapSource? RenderStageBitmap(bool includeBase = false)
         {
             var baseVis = BaseImage.Visibility;
             var vidVis = VideoPreview.Visibility;
             var hintVis = EmptyHint.Visibility;
             var selVis = SelectionLayer.Visibility;
-            BaseImage.Visibility = Visibility.Collapsed;
-            VideoPreview.Visibility = Visibility.Collapsed;
+            if (!includeBase)
+            {
+                BaseImage.Visibility = Visibility.Collapsed;
+                VideoPreview.Visibility = Visibility.Collapsed;
+            }
             EmptyHint.Visibility = Visibility.Collapsed;
             SelectionLayer.Visibility = Visibility.Collapsed;
 
@@ -1334,7 +1420,7 @@ namespace RandomDrawer
         private List<string> CandidateDirs()
         {
             var dirs = new List<string>();
-            // 先写程序数据目录 / 临时目录：避免把临时 PNG 丢进卡池目录（会被当成新封面）
+            // 先写程序数据目录 / 临时目录：避免把临时 PNG 丢进卡池目录（会被当成残留文件）
             try { dirs.Add(Path.Combine(App.AppDataDir, "cover-edits")); } catch { }
             try { dirs.Add(Path.Combine(Path.GetTempPath(), "RadomSelectCover")); } catch { }
             try { if (!string.IsNullOrEmpty(_coverPath)) { string dir = Path.GetDirectoryName(_coverPath) ?? ""; if (dir.Length > 0) dirs.Add(dir); } } catch { }
@@ -1747,6 +1833,7 @@ namespace RandomDrawer
             if (ReferenceEquals(sender, TabText)) ShowRibbon("text");
             else if (ReferenceEquals(sender, TabDraw)) ShowRibbon("draw");
             else if (ReferenceEquals(sender, TabStyle)) ShowRibbon("style");
+            else if (ReferenceEquals(sender, TabThumb)) ShowRibbon("thumb");
         }
 
         /// <summary>3.38：页签切换的代号 —— 快速连点页签时只让最后一次的动画收尾生效。</summary>
@@ -1754,7 +1841,7 @@ namespace RandomDrawer
 
         private void ShowRibbon(string tab, bool animate = true)
         {
-            if (tab != "draw" && tab != "style") tab = "text";
+            if (tab != "draw" && tab != "style" && tab != "thumb") tab = "text";
             bool changed = _ribbonTab != tab;
             string oldTab = _ribbonTab;
             _ribbonTab = tab;
@@ -1765,6 +1852,7 @@ namespace RandomDrawer
                 if (TabText != null) TabText.IsChecked = tab == "text";
                 if (TabDraw != null) TabDraw.IsChecked = tab == "draw";
                 if (TabStyle != null) TabStyle.IsChecked = tab == "style";
+                if (TabThumb != null) TabThumb.IsChecked = tab == "thumb";
             }
             catch { }
             finally { _ribbonSync = false; }
@@ -1772,6 +1860,10 @@ namespace RandomDrawer
             UpdatePaintColorVisibility();
             AdjustModeForTab(tab);
             UpdateTabIndicator(changed && animate);
+
+            // 3.77：缩略图页签没有可编辑内容 —— 下方换成卡片预览区
+            UpdateThumbPreviewVisibility(tab);
+            if (tab == "thumb") SyncThumbRibbon();
 
             var newPanel = PanelForTab(tab);
             bool fade = changed && animate && !App.IsAnimationDisabled;
@@ -1786,27 +1878,160 @@ namespace RandomDrawer
             int token = ++_ribbonSwitchToken;
             var oldPanel = PanelForTab(oldTab);
 
-            // 旧内容（属性区 + 左侧工具组）先快速淡出
-            bool anyVisible = false;
-            if (oldPanel != null && oldPanel.Visibility == Visibility.Visible)
+            // 3.77.0-snapshot-5：先退场、再入场。
+            // 旧面板先淡出（并往左带一点位移），退干净之后新面板才从右侧淡入；
+            // 之前是交叉淡化，退场和入场同时播，看起来像两套动画在抢。
+            bool hasOld = oldPanel != null && !ReferenceEquals(oldPanel, newPanel)
+                          && oldPanel.Visibility == Visibility.Visible;
+            if (!hasOld)
             {
-                anyVisible = true;
-                FadeOutRibbonPart(oldPanel);
-            }
-            if (ToolGroupRoot != null && ToolGroupRoot.Visibility == Visibility.Visible)
-            {
-                anyVisible = true;
-                FadeOutRibbonPart(ToolGroupRoot);
-            }
-
-            if (!anyVisible)
-            {
-                FinishRibbonSwitch(token, tab, newPanel);
+                EnterRibbonStage(token, tab, newPanel);
                 return;
             }
 
-            // 60 ms 后统一收尾（用计时器而不是依赖 Completed，避免新旧动画互相打断）
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
+            try
+            {
+                oldPanel.IsHitTestVisible = false;
+                Panel.SetZIndex(oldPanel, 0);
+                if (newPanel != null)
+                {
+                    Panel.SetZIndex(newPanel, 1);
+                    newPanel.Visibility = Visibility.Collapsed;
+                }
+
+                // 3.77.0-snapshot-6：整个功能区作为一个整体淡出，退干净之后再整体淡入，
+                // 不再让工具组和属性面板各播各的（那样看起来像两套动画在抢）。
+                FadeRibbonOverall(true);
+            }
+            catch { }
+
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            timer.Tick += (s, e) =>
+            {
+                try { timer.Stop(); } catch { }
+                if (token != _ribbonSwitchToken) return;
+
+                try
+                {
+                    oldPanel.BeginAnimation(UIElement.OpacityProperty, null);
+                    oldPanel.Opacity = 0;
+                    oldPanel.Visibility = Visibility.Collapsed;
+                    ResetPanelShift(oldPanel);
+                }
+                catch { }
+
+                EnterRibbonStage(token, tab, newPanel);
+            };
+            timer.Start();
+        }
+
+        /// <summary>3.77.0-snapshot-5：页签动画的「入场」阶段 —— 旧面板已经退干净，这里只让新面板进来。</summary>
+        /// <summary>3.77.0-snapshot-5：工具组离场淡出（文字 / 绘图各有一套，互不影响）。</summary>
+        private void FadeOutToolGroup(FrameworkElement? group)
+        {
+            try
+            {
+                if (group == null || group.Visibility != Visibility.Visible) return;
+                Panel.SetZIndex(group, 1);
+                group.IsHitTestVisible = false;
+                group.BeginAnimation(UIElement.OpacityProperty,
+                    new DoubleAnimation(0, TimeSpan.FromMilliseconds(110))
+                    { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } });
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-5：工具组进场淡入。</summary>
+        private void FadeInToolGroup(FrameworkElement? group)
+        {
+            try
+            {
+                if (group == null) return;
+                Panel.SetZIndex(group, 2);
+                group.BeginAnimation(UIElement.OpacityProperty, null);
+                group.Opacity = 1;
+                group.IsHitTestVisible = true;
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-7：整个功能区（工具组 + 属性面板）作为一个整体，带位移地淡出 / 淡入。
+        /// 退场：向左偏 14px 淡出；入场：从右侧 14px 处滑入淡入 —— 先退干净，再进，二者不重叠。</summary>
+        private void FadeRibbonOverall(bool fadeOut)
+        {
+            try
+            {
+                if (RibbonSecondRowHost == null) return;
+
+                var shift = EnsureHostShift();
+                if (fadeOut)
+                {
+                    RibbonSecondRowHost.IsHitTestVisible = false;
+                    shift.BeginAnimation(TranslateTransform.XProperty, null);
+                    shift.X = 0;
+                    shift.BeginAnimation(TranslateTransform.XProperty,
+                        new DoubleAnimation(-14, TimeSpan.FromMilliseconds(110))
+                        { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } });
+                    RibbonSecondRowHost.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(0, TimeSpan.FromMilliseconds(110))
+                        { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } });
+                }
+                else
+                {
+                    RibbonSecondRowHost.BeginAnimation(UIElement.OpacityProperty, null);
+                    RibbonSecondRowHost.Opacity = 0;
+                    RibbonSecondRowHost.IsHitTestVisible = false;
+
+                    shift.BeginAnimation(TranslateTransform.XProperty, null);
+                    shift.X = 14;
+                    shift.BeginAnimation(TranslateTransform.XProperty,
+                        new DoubleAnimation(0, TimeSpan.FromMilliseconds(160))
+                        { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+
+                    RibbonSecondRowHost.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(1, TimeSpan.FromMilliseconds(160))
+                        { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-7：功能区整体的横向位移变换（懒创建）。</summary>
+        private TranslateTransform? _ribbonHostShift;
+
+        private TranslateTransform EnsureHostShift()
+        {
+            if (_ribbonHostShift == null)
+            {
+                _ribbonHostShift = new TranslateTransform();
+                RibbonSecondRowHost.RenderTransform = _ribbonHostShift;
+            }
+            return _ribbonHostShift;
+        }
+
+        private void EnterRibbonStage(int token, string tab, FrameworkElement? newPanel)
+        {
+            if (token != _ribbonSwitchToken) return;
+
+            try
+            {
+                UpdateToolVisibility(tab);
+
+                if (newPanel != null)
+                {
+                    newPanel.BeginAnimation(UIElement.OpacityProperty, null);
+                    newPanel.Opacity = 1;
+                    newPanel.Visibility = Visibility.Visible;
+                    newPanel.IsHitTestVisible = true;
+                    Panel.SetZIndex(newPanel, 1);
+                    ResetPanelShift(newPanel);
+                }
+
+                FadeRibbonOverall(false);
+            }
+            catch { }
+
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
             timer.Tick += (s, e) =>
             {
                 try { timer.Stop(); } catch { }
@@ -1823,11 +2048,19 @@ namespace RandomDrawer
             {
                 UpdateToolVisibility(tab);
                 ApplyRibbonInstant(newPanel);
-
-                // 新内容从左侧淡入；左侧工具组一起入场（3.38）
-                AnimateRibbonPartIn(newPanel, TimeSpan.FromMilliseconds(40));
-                if (ToolGroupRoot != null && ToolGroupRoot.Visibility == Visibility.Visible)
-                    AnimateRibbonPartIn(ToolGroupRoot, TimeSpan.FromMilliseconds(20));
+                // 3.77.0-snapshot-6：动画结束后把整个功能区的状态钉死，避免透明度 / 命中测试残留。
+                if (RibbonSecondRowHost != null)
+                {
+                    RibbonSecondRowHost.BeginAnimation(UIElement.OpacityProperty, null);
+                    RibbonSecondRowHost.Opacity = 1;
+                    RibbonSecondRowHost.IsHitTestVisible = true;
+                    // 3.77.0-snapshot-7：动画结束把位移钉回 0，避免下次切换起点漂移
+                    if (_ribbonHostShift != null)
+                    {
+                        _ribbonHostShift.BeginAnimation(TranslateTransform.XProperty, null);
+                        _ribbonHostShift.X = 0;
+                    }
+                }
             }
             catch { }
         }
@@ -1885,7 +2118,7 @@ namespace RandomDrawer
         {
             try
             {
-                foreach (var panel in new[] { PanelTextTools, PanelDrawTools, PanelStyleTools })
+                foreach (var panel in new[] { PanelTextTools, PanelDrawTools, PanelStyleTools, PanelThumbTools })
                 {
                     if (ReferenceEquals(panel, newPanel)) continue;
                     panel.BeginAnimation(UIElement.OpacityProperty, null);
@@ -1917,6 +2150,7 @@ namespace RandomDrawer
         {
             if (tab == "draw") return PanelDrawTools;
             if (tab == "style") return PanelStyleTools;
+            if (tab == "thumb") return PanelThumbTools;
             return PanelTextTools;
         }
 
@@ -1932,6 +2166,7 @@ namespace RandomDrawer
 
                 RadioButton? target = _ribbonTab == "draw" ? TabDraw
                                     : _ribbonTab == "style" ? TabStyle
+                                    : _ribbonTab == "thumb" ? TabThumb
                                     : TabText;
                 if (target == null) return;
 
@@ -1992,6 +2227,63 @@ namespace RandomDrawer
             catch { }
         }
 
+        /// <summary>3.77（snapshot-3）：所有页签的第二行功能区统一到最高那一档，
+        /// 这样切到缩略图页签（多一行「显示卡池名」）时下方布局不会跳动。</summary>
+        private void NormalizeRibbonHeight()
+        {
+            if (RibbonSecondRow == null) return;
+
+            var panels = new FrameworkElement?[] { PanelTextTools, PanelDrawTools, PanelStyleTools, PanelThumbTools };
+            var savedPanels = new List<(FrameworkElement el, Visibility vis)>();
+            Visibility savedTool = ToolGroupRoot?.Visibility ?? Visibility.Collapsed;
+            Visibility savedToolDraw = ToolGroupDraw?.Visibility ?? Visibility.Collapsed;
+
+            try
+            {
+                foreach (FrameworkElement? p in panels)
+                {
+                    if (p == null) continue;
+                    savedPanels.Add((p, p.Visibility));
+                    p.Visibility = Visibility.Hidden;   // Hidden 会参与测量但不显示
+                }
+                if (ToolGroupRoot != null) ToolGroupRoot.Visibility = Visibility.Hidden;
+                if (ToolGroupDraw != null) ToolGroupDraw.Visibility = Visibility.Hidden;
+
+                double max = 0;
+
+                if (ToolGroupRoot != null)
+                {
+                    ToolGroupRoot.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    max = Math.Max(max, ToolGroupRoot.DesiredSize.Height);
+                }
+                if (ToolGroupDraw != null)
+                {
+                    ToolGroupDraw.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    max = Math.Max(max, ToolGroupDraw.DesiredSize.Height);
+                }
+
+                foreach (FrameworkElement? p in panels)
+                {
+                    if (p == null) continue;
+                    p.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    max = Math.Max(max, p.DesiredSize.Height);
+                }
+
+                // 3.77.0-snapshot-4：只统一高度；水平居中交给 RibbonSecondRowHost(满宽 Grid)
+                // + RibbonSecondRow(HorizontalAlignment=Center) 处理。
+                if (max > 0 && Math.Abs(RibbonSecondRow.MinHeight - max) > 0.5)
+                    RibbonSecondRow.MinHeight = max;
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：统一功能区高度失败"); }
+            finally
+            {
+                // 无论测量成不成功都必须还原可见性，否则整组工具会「消失」（3.77.0-snapshot-3 修复）
+                foreach ((FrameworkElement el, Visibility vis) in savedPanels) el.Visibility = vis;
+                if (ToolGroupRoot != null) ToolGroupRoot.Visibility = savedTool;
+                if (ToolGroupDraw != null) ToolGroupDraw.Visibility = savedToolDraw;
+            }
+        }
+
         /// <summary>3.36：工具按钮按页签显示 —— 文字页签没有笔 / 橡皮擦、绘图页签没有文本框。</summary>
         private void UpdateToolVisibility(string tab)
         {
@@ -2001,28 +2293,50 @@ namespace RandomDrawer
                 bool draw = tab == "draw";
 
                 if (ToolGroupRoot != null)
-                    ToolGroupRoot.Visibility = (text || draw) ? Visibility.Visible : Visibility.Collapsed;
+                {
+                    // 3.77.0-snapshot-5（m04896）：两个页签各用一套独立工具组，整组显隐。
+                    ToolGroupRoot.Visibility = text ? Visibility.Visible : Visibility.Collapsed;
+                    if (text)
+                    {
+                        // 淡出动画如果被打断（快速连点页签），Opacity 会停在 0 ——
+                        // 整组工具看起来「凭空消失」，这里每次切换都归位。
+                        ToolGroupRoot.BeginAnimation(UIElement.OpacityProperty, null);
+                        ToolGroupRoot.Opacity = 1;
+                        ToolGroupRoot.IsHitTestVisible = true;
+                    }
+                }
+                if (ToolGroupDraw != null)
+                {
+                    ToolGroupDraw.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
+                    if (draw)
+                    {
+                        ToolGroupDraw.BeginAnimation(UIElement.OpacityProperty, null);
+                        ToolGroupDraw.Opacity = 1;
+                        ToolGroupDraw.IsHitTestVisible = true;
+                    }
+                }
 
-                if (BtnTextTool != null)
-                    BtnTextTool.Visibility = text ? Visibility.Visible : Visibility.Collapsed;
+                // 3.77（snapshot-3）：显隐控制放到「整列」上 —— 只藏按钮会让下方文字顶到列顶、
+                // 与其他列的图标文字错位。
+                if (ColToolText != null)
+                    ColToolText.Visibility = text ? Visibility.Visible : Visibility.Collapsed;
                 // 3.42：「选择」在文字 / 绘图两个页签都有，位置在最左侧
-                if (BtnSelectTool != null)
-                    BtnSelectTool.Visibility = (text || draw) ? Visibility.Visible : Visibility.Collapsed;
-                if (BtnHighlight != null)
-                    BtnHighlight.Visibility = (text || draw) ? Visibility.Visible : Visibility.Collapsed;
+                if (ColToolSelect != null)
+                    ColToolSelect.Visibility = (text || draw) ? Visibility.Visible : Visibility.Collapsed;
+                if (ColToolHighlight != null)
+                    ColToolHighlight.Visibility = (text || draw) ? Visibility.Visible : Visibility.Collapsed;
                 // 3.39：荧光样式下拉只在文字页签出现（绘图页签的荧光笔是自由涂抹）
-                if (BtnHighlightMenu != null)
-                    BtnHighlightMenu.Visibility = text ? Visibility.Visible : Visibility.Collapsed;
-                if (BtnPen != null)
-                    BtnPen.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
-                if (BtnEraser != null)
-                    BtnEraser.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
-                if (BtnEyedropper != null)
-                    BtnEyedropper.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
+                if (HighlightMenuColumn != null)
+                    HighlightMenuColumn.Visibility = text ? Visibility.Visible : Visibility.Collapsed;
+                if (ColToolPen != null)
+                    ColToolPen.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
+                if (ColToolEraser != null)
+                    ColToolEraser.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
+                if (ColToolEyedropper != null)
+                    ColToolEyedropper.Visibility = draw ? Visibility.Visible : Visibility.Collapsed;
 
                 // 3.40.1：荧光笔在文字页签是「给文字加荧光」，绘图页签是「在封面上涂抹」
-                if (_highlightHint != null)
-                    _highlightHint.Text = text ? "荧光笔：给选中的文字加荧光" : "荧光笔：在封面上涂抹";
+                // 3.77.0-snapshot-4：按钮悬浮提示已全部移除，这里不再同步气泡文字。
 
                 // 离开绘图页签时退出取色（不然光标还停在十字上）
                 if (!draw) EndColorPick(true);
@@ -2054,8 +2368,1207 @@ namespace RandomDrawer
                     _mode = ToolMode.None;
                     ApplyMode();
                 }
+                else if (tab == "thumb" && _mode != ToolMode.None)
+                {
+                    // 3.77：缩略图页签没有可编辑内容，切过来就退出所有工具
+                    _mode = ToolMode.None;
+                    ApplyMode();
+                }
             }
             catch { }
+        }
+
+        // =====================================================================================
+        // 3.77：缩略图页签 —— 卡池卡片的缩略图来源 / 显示卡池名 / 文字颜色 / 预览
+        // 页签里没有任何可编辑内容：卡片和主页都用这里的选择直接渲染，预览只读。
+        // =====================================================================================
+
+        private PoolCover.ThumbMode _thumbMode = PoolCover.ThumbMode.Default;
+        private bool _thumbShowText = true;
+        private bool _thumbRound;
+
+        /// <summary>3.77.0-snapshot-6：主页卡片的圆角半径（0 = 方角）。</summary>
+        private double _thumbRadius = 9;
+
+        // 3.77.0-snapshot-10：「使用原封面缩略图」时视频/GIF 的第一帧缓存，批注层叠在它上面实时合成。
+        private BitmapSource? _coverFirstFrame;
+        private Color? _thumbTextColor;
+        private bool _thumbSync;
+        /// <summary>缩略图功能区的排版是否已经初始化过 —— 第一次不做滑动动画，之后切换模式才做。</summary>
+        private bool _thumbLayoutReady;
+        // 3.77.0-snapshot-15：上一次的缩略图功能区布局标记（默认 / 原封面 / 自定义），
+        // 用于在「列顺序没变、只是模式变了」时也能播整体淡出淡入。
+        private string _lastThumbLayoutKey = "";
+        /// <summary>卡片预览的基准尺寸（宽度固定，高度按缩略图比例），缩放条以它为基准。</summary>
+        private Size _cardPreviewBaseSize;
+        /// <summary>上一次自动适配缩放的基准尺寸 —— 只在卡片尺寸变化时重新适配，避免把用户拖好的倍率拉回去。</summary>
+        private Size _lastAutoFitSize = new Size(0, 0);
+        /// <summary>是否已经做过一次自动适配 —— 换卡池 / 换模式时重置。</summary>
+        private bool _hasAutoFit;
+
+        /// <summary>缩略图页签显示时调用：从封面元数据里恢复四个模式按钮和文字开关的状态。</summary>
+        private void SyncThumbRibbon()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                {
+                    _thumbMode = PoolCover.GetThumbMode(_poolDir);
+                    _thumbShowText = PoolCover.GetThumbShowText(_poolDir);
+                    _thumbRadius = PoolCover.GetThumbRadius(_poolDir);
+                    _thumbRound = _thumbRadius > 0.5;
+                    _thumbTextColor = PoolCover.GetThumbTextColor(_poolDir);
+                }
+
+                _thumbSync = true;
+                try
+                {
+                    if (ThumbModeDefault != null) ThumbModeDefault.IsChecked = _thumbMode == PoolCover.ThumbMode.Default;
+                    if (ThumbModeCover != null) ThumbModeCover.IsChecked = _thumbMode == PoolCover.ThumbMode.Cover;
+                    if (ThumbModeCustom != null) ThumbModeCustom.IsChecked = _thumbMode == PoolCover.ThumbMode.Custom;
+                    if (ChkThumbShowText != null) ChkThumbShowText.IsChecked = _thumbShowText;
+                    if (ThumbTextColorSwatch != null)
+                        ThumbTextColorSwatch.Background = new SolidColorBrush(_thumbTextColor ?? ThemeTextColor());
+                        if (ThumbTextColorSwatchBlock != null) ThumbTextColorSwatchBlock.Background = ThumbTextColorSwatch.Background;
+                }
+                finally { _thumbSync = false; }
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：同步缩略图页签失败"); }
+
+            UpdateThumbModeUi();
+            UpdateThumbCornerButtons();
+            UpdateThumbImportButton();
+            RefreshThumbPreview();
+        }
+
+        /// <summary>3.78：圆角 / 方角合并成一个按钮，显示的是「点一下会切过去」的那一种。
+        /// 3.77.0-snapshot-6：图标与文案都按当前的圆角半径走。</summary>
+        private void UpdateThumbCornerButtons()
+        {
+            try
+            {
+                bool round = _thumbRadius > 0.5;
+                if (ThumbCornerIcon != null)
+                    ThumbCornerIcon.CornerRadius = new CornerRadius(round ? Math.Min(4, Math.Max(1.5, _thumbRadius / 2.5)) : 1.5);
+                if (LblThumbCorner != null)
+                    LblThumbCorner.Text = round ? "切换为方角" : "切换为圆角";
+                // 3.77.0-snapshot-4：本页所有按钮的悬浮提示已移除，这里不再挂 ToolTip。
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-5：自定义缩略图按钮的文案 / 图标随「有没有导入过图片」变化。</summary>
+        private void UpdateThumbImportButton()
+        {
+            try
+            {
+                bool has = false;
+                try
+                {
+                    var path = string.IsNullOrEmpty(_poolDir) ? "" : PoolCover.GetCustomThumbPath(_poolDir);
+                    has = !string.IsNullOrEmpty(path) && File.Exists(path);
+                }
+                catch { has = false; }
+
+                if (TxtImportThumbLabel != null)
+                    TxtImportThumbLabel.Text = has ? "更换缩略图\n图片" : "导入缩略图\n图片";
+                if (TxtImportThumbIcon != null)
+                    TxtImportThumbIcon.Text = has ? "\uE72C" : "\uE8B9";
+            }
+            catch { }
+        }
+
+        private void BtnThumbCorner_Click(object sender, RoutedEventArgs e) => SetThumbCardRadius(_thumbRadius > 0.5 ? 0 : 9);
+
+        /// <summary>3.77.0-snapshot-6：卡片圆角右侧的小箭头 —— 打开「圆角大小」气泡。</summary>
+        // 3.77.0-snapshot-7：箭头拆成独立按钮「圆角选项」，点它调卡片圆角大小
+        private void BtnThumbRadius_Click(object sender, RoutedEventArgs e) => OpenRadiusPanel(BtnThumbRadius, RadiusTarget.Thumb);
+
+        /// <summary>3.77.0-snapshot-6：直接设定卡片圆角半径（0 = 方角），并写进 cover_thumb.txt。</summary>
+        private void SetThumbCardRadius(double radius, bool recordUndo = true)
+        {
+            try
+            {
+                radius = Math.Max(0, Math.Min(64, radius));
+                double previous = _thumbRadius;
+                bool same = Math.Abs(previous - radius) < 0.05;
+                _thumbRadius = radius;
+                _thumbRound = radius > 0.5;
+                UpdateThumbCornerButtons();
+                UpdateThumbRadiusColumn(animate: true);
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                    PoolCover.SetThumbRadius(_poolDir, radius);
+                RefreshThumbPreview();
+                NotifyThumbSettingsChanged();
+                if (!same && recordUndo)
+                    PushThumbAction(new EditAction
+                    {
+                        Undo = () => SetThumbCardRadius(previous, false),
+                        Redo = () => SetThumbCardRadius(radius, false),
+                    });
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：设置卡片圆角大小失败"); }
+        }
+
+        /// <summary>当前封面是不是动画（GIF）或视频：这类封面做缩略图只能取第一帧。</summary>
+        private bool IsAnimatedCover()
+        {
+            try
+            {
+                if (_editingDefaultCover) return false;
+                if (_isVideo) return true;
+                string ext = Path.GetExtension(_coverPath ?? "").ToLowerInvariant();
+                return ext == ".gif";
+            }
+            catch { return false; }
+        }
+
+        private void ThumbMode_Checked(object sender, RoutedEventArgs e)
+        {
+            // 3.77.0-snapshot-11：用户主动切换模式时，本次布局变化必须有动画
+
+            if (_thumbSync) return;
+            // snapshot-12: enable animation only for real user switches (this line must stay after the guard),
+            // otherwise SyncThumbRibbon setting IsChecked programmatically would also enable it and animate on entry.
+            _thumbLayoutReady = true;
+            try
+            {
+                PoolCover.ThumbMode mode = ReferenceEquals(sender, ThumbModeCover) ? PoolCover.ThumbMode.Cover
+                                            : ReferenceEquals(sender, ThumbModeCustom) ? PoolCover.ThumbMode.Custom
+                                            : PoolCover.ThumbMode.Default;
+
+                // 缩略图只支持静态图片：动画封面（GIF / 视频）先提示「只取第一帧」
+                if (mode == PoolCover.ThumbMode.Cover && IsAnimatedCover())
+                {
+                    var result = CustomMessageBox.Show(Window.GetWindow(this),
+                        "当前封面是动画（GIF）或视频。主界面卡片的缩略图只支持静态图片，继续将仅截取第一帧。\n\n是否继续？",
+                        "使用原封面缩略图", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                    if (result != MessageBoxResult.Yes)
+                    {
+                        SyncThumbRibbon();
+                        return;
+                    }
+                }
+
+                // 3.77.0-snapshot-7：选「使用原封面缩略图」时提醒一次——批注会一起合成进卡片缩略图，
+                // 并在保存时把「底层 + 批注」合成成一张图写进卡池目录（每次提醒，可勾「不再提示」）。
+                if (mode == PoolCover.ThumbMode.Cover && !App.ThumbOverlayNoticeDismissed)
+                {
+                    try
+                    {
+                        bool dontAsk = false;
+                        CustomMessageBox.ShowWithCheckbox(Window.GetWindow(this),
+                            "「使用原封面缩略图」会保留封面上的批注：卡片缩略图里能看到你画的文字与笔迹。\n\n保存时会把「封面 + 批注」合成成一张图，放进卡池目录（cover_thumb_auto.png），主界面卡片直接用这张图。",
+                            "使用原封面缩略图", "不再提示", out dontAsk, MessageBoxImage.Information);
+                        if (dontAsk)
+                        {
+                            App.ThumbOverlayNoticeDismissed = true;
+                            App.SaveSettings();
+                        }
+                    }
+                    catch { }
+                }
+
+                PoolCover.ThumbMode previous = _thumbMode;
+                _thumbMode = mode;
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                    PoolCover.SetThumbMode(_poolDir, mode);
+
+                UpdateThumbModeUi();
+                RefreshThumbPreview();
+                NotifyThumbSettingsChanged();
+                if (previous != mode)
+                    PushThumbAction(new EditAction
+                    {
+                        Undo = () => ApplyThumbMode(previous),
+                        Redo = () => ApplyThumbMode(mode),
+                    });
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：切换缩略图模式失败"); }
+        }
+
+        /// <summary>缩略图设置直接写盘：通知主页卡片立刻按新样式重建。</summary>
+        private void NotifyThumbSettingsChanged()
+        {
+            try { MessageBus.Publish(new AppMessages.PoolListChanged()); } catch { }
+        }
+
+        /// <summary>按当前模式重排缩略图功能区的列（默认 / 原封面 / 自定义 三种布局）。</summary>
+        private void UpdateThumbModeUi()
+        {
+            try
+            {
+                bool isDefault = _thumbMode == PoolCover.ThumbMode.Default;
+                bool isCustom = _thumbMode == PoolCover.ThumbMode.Custom;
+
+                if (ChkThumbShowText != null && ChkThumbShowText.IsChecked != _thumbShowText)
+                    ChkThumbShowText.IsChecked = _thumbShowText;
+
+                // 「字体颜色」和「显示卡池名」同列上下两行：上行永远是色块（46），
+                // 下行 26 是文字 —— 默认模式放「字体颜色」，有开关时换成开关 +「显示卡池名」。
+                // 这样文字行始终和其它列对齐、整列高度恒定 72。
+                SetThumbColorLayout(isDefault, animate: _thumbLayoutReady);
+                // 3.77.0-snapshot-13：这里不要再把 _thumbLayoutReady 置 true，
+                // 否则进入页面时的那次程序化同步也会把标记点亮，导致用户第一次切换样式时反而不播动画。
+
+                SetColumnVisible(ColThumbImport, isCustom);
+                SetColumnVisible(ColThumbCorner, true);
+                // 3.77.0-snapshot-8：「圆角选项」只在圆角状态下显示（带宽度 + 淡入过渡）
+                UpdateThumbRadiusColumn(animate: _thumbLayoutReady);
+
+                ApplyThumbColumnLayout(isDefault, isCustom);
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：更新缩略图功能区失败"); }
+        }
+
+        /// <summary>3.77.0-snapshot-8：「字体颜色 / 显示卡池名」列 = 上行按钮（色块 + 文字）+ 下行开关行。
+        /// stacked=true 表示「默认」模式（没有开关），下行整行隐藏，列高仍 72，与其它列对齐。</summary>
+        private void SetThumbColorLayout(bool stacked, bool animate = false)
+        {
+            try
+            {
+                // 3.77.0-snapshot-10：两种排版二选一 ——
+                //  stacked=true（「默认」样式）：只有「字体颜色」一个 ToolBlock（色块图标行 + 文字行），
+                //                            和别的工具列完全一致；
+                //  stacked=false（原封面 / 自定义）：上行「色块 + 字体颜色」横排按钮，
+                //                            下行「开关 + 显示卡池名」。
+                if (ThumbColorBlock != null)
+                    ThumbColorBlock.Visibility = stacked ? Visibility.Visible : Visibility.Collapsed;
+                if (ThumbColorWide != null)
+                    ThumbColorWide.Visibility = stacked ? Visibility.Collapsed : Visibility.Visible;
+                if (ChkThumbShowText != null)
+                    ChkThumbShowText.Visibility = stacked ? Visibility.Collapsed : Visibility.Visible;
+                if (LblThumbShowText != null)
+                if (LblThumbShowText != null)
+                    LblThumbShowText.Visibility = stacked ? Visibility.Collapsed : Visibility.Visible;
+
+                // column width: same as other tool columns in the compact mode, wider when the switch shows
+                if (ColThumbColor != null)
+                    ColThumbColor.Width = stacked ? 84 : 132;
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-8：「圆角选项」只在卡片确实是圆角时出现（宽度 + 淡入，带位移过渡）。</summary>
+        private void UpdateThumbRadiusColumn(bool animate)
+        {
+            try
+            {
+                if (ColThumbRadius == null) return;
+
+                bool show = _thumbRadius > 0.5;
+                bool animateIt = animate && !App.IsAnimationDisabled;
+                const double fullWidth = 84;
+
+                if (!animateIt)
+                {
+                    ColThumbRadius.BeginAnimation(FrameworkElement.WidthProperty, null);
+                    ColThumbRadius.BeginAnimation(UIElement.OpacityProperty, null);
+                    ColThumbRadius.Width = show ? fullWidth : 0;
+                    ColThumbRadius.Opacity = show ? 1 : 0;
+                    ColThumbRadius.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    return;
+                }
+
+                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                var dur = TimeSpan.FromMilliseconds(180);
+
+                if (show)
+                {
+                    bool wasHidden = ColThumbRadius.Visibility != Visibility.Visible || ColThumbRadius.Width < 1;
+                    ColThumbRadius.Visibility = Visibility.Visible;
+                    double fromW = ColThumbRadius.Width > 1 ? ColThumbRadius.Width : 0;
+
+                    var grow = new DoubleAnimation(fromW, fullWidth, dur) { EasingFunction = ease };
+                    grow.Completed += (s, e) =>
+                    {
+                        try
+                        {
+                            ColThumbRadius.BeginAnimation(FrameworkElement.WidthProperty, null);
+                            ColThumbRadius.Width = fullWidth;
+                        }
+                        catch { }
+                    };
+                    ColThumbRadius.BeginAnimation(FrameworkElement.WidthProperty, grow);
+                    ColThumbRadius.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(wasHidden ? 0 : 1, 1, dur) { EasingFunction = ease });
+                }
+                else if (ColThumbRadius.Visibility == Visibility.Visible)
+                {
+                    double fromW = ColThumbRadius.Width > 1 ? ColThumbRadius.Width : fullWidth;
+                    var shrink = new DoubleAnimation(fromW, 0, dur) { EasingFunction = ease };
+                    shrink.Completed += (s, e) =>
+                    {
+                        try
+                        {
+                            ColThumbRadius.BeginAnimation(FrameworkElement.WidthProperty, null);
+                            ColThumbRadius.Width = 0;
+                            ColThumbRadius.Opacity = 0;
+                            ColThumbRadius.Visibility = Visibility.Collapsed;
+                        }
+                        catch { }
+                    };
+                    ColThumbRadius.BeginAnimation(FrameworkElement.WidthProperty, shrink);
+                    ColThumbRadius.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(1, 0, dur) { EasingFunction = ease });
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>把元素先放到「旧位置」，再用匀加速滑回真实位置（FLIP 收尾）。</summary>
+        private static void SlideFromOffset(UIElement element, Vector offset)
+        {
+            if (element == null) return;
+            if (Math.Abs(offset.X) < 0.5 && Math.Abs(offset.Y) < 0.5) return;
+
+            try
+            {
+                var tt = new TranslateTransform(offset.X, offset.Y);
+                element.RenderTransform = tt;
+                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                var dur = TimeSpan.FromMilliseconds(170);
+                tt.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0, dur) { EasingFunction = ease });
+                tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, dur) { EasingFunction = ease });
+            }
+            catch { }
+        }
+
+        /// <summary>3.78：缩略图功能区的列顺序。顺序与显隐都按需求里「图标行 + 文字行」的排版走。</summary>
+        private void ApplyThumbColumnLayout(bool isDefault, bool isCustom)
+        {
+            if (PanelThumbTools == null) return;
+
+            var order = new List<FrameworkElement>
+            {
+                ColThumbDefault,
+                ColThumbCover,
+                ColThumbColor,
+                ColThumbCustom,
+            };
+            if (isCustom) order.Add(ColThumbImport);
+            // 3.77.0-snapshot-9：圆角开关左侧的分隔线也要参与重排
+            order.Add(SepThumbBeforeCorner);
+            order.Add(ColThumbCorner);
+            // 3.77.0-snapshot-7：圆角开关右侧独立出「圆角选项」（点它调卡片圆角大小）
+            order.Add(ColThumbRadius);
+            order.RemoveAll(c => c == null);
+
+            bool changed = PanelThumbTools.Children.Count != order.Count;
+            for (int i = 0; i < order.Count && !changed; i++)
+            {
+                if (!ReferenceEquals(PanelThumbTools.Children[i], order[i])) changed = true;
+            }
+
+            // 3.77.0-snapshot-15：「默认」和「使用原封面缩略图」两种模式的列顺序完全一样，
+            // 只靠列序判断会认为「没变化」而不播动画 —— 用户反复切换时会觉得动画丢了。
+            // 这里把「模式」也纳入判断：模式变了同样走「整块左淡出 → 右淡入」。
+            string layoutKey = (isDefault ? "d" : "n") + "|" + (isCustom ? "c" : "n");
+            bool keyChanged = !string.Equals(_lastThumbLayoutKey, layoutKey, StringComparison.Ordinal);
+            _lastThumbLayoutKey = layoutKey;
+
+            if (!changed && !keyChanged) return;
+
+            Action reorder = () =>
+            {
+                PanelThumbTools.Children.Clear();
+                foreach (var col in order) PanelThumbTools.Children.Add(col);
+                PanelThumbTools.UpdateLayout();
+            };
+
+            // 3.77.0-snapshot-9：不再逐列「让位」，改成整块功能区向左淡出、新内容向右淡入。
+            // 特例：「圆角选项」仍然走自己的宽度动画（UpdateThumbRadiusColumn），不受这里影响。
+            // 3.77.0-snapshot-15：进页面首次同步（_thumbLayoutReady 还是 false）只落位、不播动画。
+            if (!_thumbLayoutReady || App.IsAnimationDisabled)
+            {
+                if (PanelThumbTools.RenderTransform is TranslateTransform shift0) shift0.X = 0;
+                PanelThumbTools.BeginAnimation(UIElement.OpacityProperty, null);
+                PanelThumbTools.Opacity = 1;
+                reorder();
+                return;
+            }
+
+            TranslateTransform? shift = PanelThumbTools.RenderTransform as TranslateTransform;
+            if (shift == null)
+            {
+                shift = new TranslateTransform(0, 0);
+                PanelThumbTools.RenderTransform = shift;
+            }
+
+            var easeIn = new CubicEase { EasingMode = EasingMode.EaseIn };
+            var easeOut = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var durOut = TimeSpan.FromMilliseconds(110);
+            var durIn = TimeSpan.FromMilliseconds(160);
+
+            var fadeOut = new DoubleAnimation(PanelThumbTools.Opacity <= 0.01 ? 0 : 1, 0, durOut) { EasingFunction = easeIn };
+            var moveOut = new DoubleAnimation(0, -16, durOut) { EasingFunction = easeIn };
+            fadeOut.Completed += (s, e) =>
+            {
+                try
+                {
+                    reorder();
+                    PanelThumbTools.Opacity = 0;
+                    if (PanelThumbTools.RenderTransform is TranslateTransform sh) sh.X = 16;
+                    PanelThumbTools.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(0, 1, durIn) { EasingFunction = easeOut });
+                    if (PanelThumbTools.RenderTransform is TranslateTransform sh2)
+                        sh2.BeginAnimation(TranslateTransform.XProperty,
+                            new DoubleAnimation(16, 0, durIn) { EasingFunction = easeOut });
+                }
+                catch { }
+            };
+            PanelThumbTools.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+            shift.BeginAnimation(TranslateTransform.XProperty, moveOut);
+        }
+
+        private void SetColumnVisible(FrameworkElement column, bool visible)
+        {
+            if (column == null) return;
+            Visibility target = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (column.Visibility == target) return;
+            column.Visibility = target;
+        }
+
+        /// <summary>列位移 + 淡入：匀加速（CubicEase）收尾，位移结束不回跳。</summary>
+        private static void PlayColumnSlide(FrameworkElement element, double fromX, bool fadeIn)
+        {
+            try
+            {
+                var translate = new TranslateTransform(fromX, 0);
+                element.RenderTransform = translate;
+                var slide = new DoubleAnimation(0, TimeSpan.FromMilliseconds(200))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                };
+                translate.BeginAnimation(TranslateTransform.XProperty, slide);
+
+                if (fadeIn)
+                {
+                    element.Opacity = 0;
+                    element.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>缩略图页签没有可编辑内容：编辑画布让位给卡片 / 主页预览。</summary>
+        private void UpdateThumbPreviewVisibility(string tab)
+        {
+            try
+            {
+                bool show = tab == "thumb" && _hasMedia;
+                if (ThumbPreviewHost != null)
+                {
+                    if (show)
+                    {
+                        // 预览区淡入，避免编辑画布和预览之间硬切
+                        ThumbPreviewHost.Visibility = Visibility.Visible;
+                        if (!App.IsAnimationDisabled)
+                        {
+                            ThumbPreviewHost.Opacity = 0;
+                            ThumbPreviewHost.BeginAnimation(UIElement.OpacityProperty,
+                                new DoubleAnimation(1, TimeSpan.FromMilliseconds(200))
+                                {
+                                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                                });
+                        }
+                    }
+                    else
+                    {
+                        ThumbPreviewHost.BeginAnimation(UIElement.OpacityProperty, null);
+                        ThumbPreviewHost.Visibility = Visibility.Collapsed;
+                    }
+                }
+                if (StageScroll != null)
+                    StageScroll.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+                // 3.77.0-snapshot-7：底部状态栏常驻（有媒体时），画布缩放 / 预览缩放按页签切换
+                if (BottomArea != null)
+                    BottomArea.Visibility = _hasMedia ? Visibility.Visible : Visibility.Collapsed;
+                if (CanvasZoomGroup != null)
+                    CanvasZoomGroup.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+                if (PreviewZoomGroup != null)
+                    PreviewZoomGroup.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+                // 3.77.0-snapshot-9：切到「缩略图」只看卡片效果，视频进度条收起来、视频先暂停；
+                // 切回其它页签时把暂停恢复成播放（用户自己按暂停的不动）。
+                if (MediaBarCard != null)
+                {
+                    if (show)
+                    {
+                        MediaBarCard.Visibility = Visibility.Collapsed;
+                        if (_isVideo || (_gifDecoder != null && _gifDecoder.Frames.Count > 1))
+                        {
+                            if (!_mediaPaused)
+                            {
+                                PauseMedia();
+                                _thumbTabPausedMedia = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (_thumbTabPausedMedia)
+                        {
+                            _thumbTabPausedMedia = false;
+                            ResumeMedia();
+                        }
+                        UpdateMediaBarVisibility();
+                    }
+                }
+
+                if (show)
+                {
+                    UpdateThumbModeUi();
+                    // 先让预览区完成布局，拿到实际可用尺寸后再挑缩放值、渲染内容
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        AutoFitPreviewZoom();
+                        RefreshThumbPreview();
+                    }), DispatcherPriority.Loaded);
+                }
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：切换缩略图预览失败"); }
+        }
+
+        private void RefreshThumbPreview()
+        {
+            if (ThumbPreviewHost == null || ThumbPreviewHost.Visibility != Visibility.Visible) return;
+            try
+            {
+                string name = GetThumbPoolName();
+                Color textColor = _thumbTextColor ?? ThemeTextColor();
+
+                // 3.78（snapshot-3）：预览区只渲染卡片本身（不裁剪封面、高度按图片比例）。
+                if (ThumbPreviewContent != null)
+                    ThumbPreviewContent.Content = BuildCardPreview(name, textColor);
+
+                // 3.77.0-snapshot-11: the card size just changed, so re-fit the zoom once for this content
+                _hasAutoFit = false;
+                AutoFitPreviewZoom();
+                ApplyPreviewZoom();
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：刷新缩略图预览失败"); }
+        }
+
+        /// <summary>按缩放条的值等比缩放预览内容。</summary>
+        private void ApplyPreviewZoom()
+        {
+            try
+            {
+                double scale = SlPreviewZoom != null ? SlPreviewZoom.Value / 100.0 : 1.0;
+                if (ThumbPreviewContent?.Content is FrameworkElement content)
+                    content.LayoutTransform = new ScaleTransform(scale, scale);
+                if (TxtPreviewZoom != null)
+                    TxtPreviewZoom.Text = Math.Round(scale * 100) + "%";
+            }
+            catch { }
+        }
+
+        /// <summary>进入缩略图页签时按可用空间自动挑一个缩放值（30%~100%）。</summary>
+        private void AutoFitPreviewZoom()
+        {
+            try
+            {
+                if (ThumbPreviewScroll == null || SlPreviewZoom == null) return;
+                if (_cardPreviewBaseSize.Width < 1 || _cardPreviewBaseSize.Height < 1) return;
+                // 3.77.0-snapshot-6：只在预览卡片尺寸变化（切模式 / 换封面）时自动挑一次倍率。
+                // 之前每次刷新预览都会重算，导致用户拖到别的倍率又被拉回 100%。
+                if (_hasAutoFit &&
+                    Math.Abs(_lastAutoFitSize.Width - _cardPreviewBaseSize.Width) < 0.5 &&
+                    Math.Abs(_lastAutoFitSize.Height - _cardPreviewBaseSize.Height) < 0.5)
+                    return;
+                _hasAutoFit = true;
+                _lastAutoFitSize = _cardPreviewBaseSize;
+                double availW = Math.Max(120, ThumbPreviewScroll.ActualWidth - 80);
+                double availH = Math.Max(120, ThumbPreviewScroll.ActualHeight - 80);
+                double fit = Math.Min(availW / _cardPreviewBaseSize.Width, availH / _cardPreviewBaseSize.Height);
+                double percent = Math.Round(Math.Max(10, Math.Min(100, fit * 100)));
+                if (Math.Abs(SlPreviewZoom.Value - percent) > 0.5)
+                    SlPreviewZoom.Value = percent;
+            }
+            catch { }
+        }
+
+        /// <summary>缩略图预览区：鼠标滚轮直接缩放（Ctrl + 滚轮同样有效，与 +/- 按钮、缩放条同一份状态）。</summary>
+        private void ThumbPreviewScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            // 3.77.0-snapshot-5：不再要求按住 Ctrl，滚轮直接缩放；原来的 Ctrl + 滚轮依旧可用。
+            if (SlPreviewZoom == null || e.Delta == 0) return;
+            e.Handled = true;
+            double target = SlPreviewZoom.Value + (e.Delta > 0 ? 5 : -5);
+            SlPreviewZoom.Value = Math.Max(SlPreviewZoom.Minimum, Math.Min(SlPreviewZoom.Maximum, target));
+        }
+
+
+        private void SlPreviewZoom_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            // XAML 初始化时也会触发一次，控件还没就绪，判空即可
+            if (ThumbPreviewContent == null) return;
+            ApplyPreviewZoom();
+        }
+
+        private void BtnPreviewZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            if (SlPreviewZoom != null)
+                SlPreviewZoom.Value = Math.Max(SlPreviewZoom.Minimum, SlPreviewZoom.Value - 10);
+        }
+
+        private void BtnPreviewZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            if (SlPreviewZoom != null)
+                SlPreviewZoom.Value = Math.Min(SlPreviewZoom.Maximum, SlPreviewZoom.Value + 10);
+        }
+
+        private string GetThumbPoolName()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_poolDir))
+                    return Path.GetFileName(_poolDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+            catch { }
+            return "卡池";
+        }
+
+        /// <summary>缩略图预览位图：默认样式没有图；原封面用当前编辑画面（实时同步未保存的编辑）。</summary>
+        private BitmapSource? GetThumbPreviewBitmap()
+        {
+            try
+            {
+                switch (_thumbMode)
+                {
+                    case PoolCover.ThumbMode.Custom:
+                        {
+                            string path = PoolCover.GetCustomThumbPath(_poolDir);
+                            return File.Exists(path) ? ImageHelper.LoadBitmapSized(path, 900) : null;
+                        }
+                    case PoolCover.ThumbMode.Cover:
+                        {
+                            // 3.77.0-snapshot-10：缩略图始终反映「当前编辑画面」（含未保存的批注），
+                            // 切换页签回来也自动同步。视频 / GIF 用第一帧原图 + 当前批注层合成，
+                            // 既不跟着播放进度往后跳，也不会丢掉本次编辑的批注。
+                            if (IsAnimatedCover())
+                            {
+                                BitmapSource? frame = _coverFirstFrame;
+                                if (frame == null)
+                                {
+                                    frame = PoolCover.LoadCoverFirstFrame(_coverPath);
+                                    _coverFirstFrame = frame;
+                                }
+                                if (frame != null)
+                                {
+                                    BitmapSource? overlay = RenderStageBitmap(includeBase: false);
+                                    return overlay == null ? frame : ComposeOnFrame(frame, overlay);
+                                }
+                            }
+                            return GetCurrentEditBitmap();
+                        }
+                    default:
+                        return null;
+                }
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：读取缩略图预览失败"); }
+            return null;
+        }
+
+        /// <summary>当前编辑画面（含未保存的批注）；没导入封面时返回 null。</summary>
+        private BitmapSource? GetCurrentEditBitmap()
+        {
+            try
+            {
+                if (!_hasMedia) return null;
+
+                // 3.77：缩略图页签会把 StageScroll 收起来换成预览区，
+                // 此时 Stage 没有尺寸、直接渲染出来是空的 —— 临时恢复可见并完成布局，
+                // 渲染完立刻收回去。只影响这一帧，不会在界面上闪。
+                bool restoreHidden = StageScroll != null && StageScroll.Visibility != Visibility.Visible;
+                if (restoreHidden)
+                {
+                    StageScroll.Visibility = Visibility.Visible;
+                    StageScroll.UpdateLayout();
+                    LayoutStage();
+                }
+
+                try
+                {
+                    // 缩略图要带封面本身，不能像批注图层那样把底图藏起来，
+                    // 否则渲染出来的只有批注，透明底在预览里就是一片白。
+                    BitmapSource? bmp = RenderStageBitmap(includeBase: true);
+                    return bmp;
+                }
+                finally
+                {
+                    if (restoreHidden && StageScroll != null) StageScroll.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：生成缩略图预览画面失败"); }
+            return null;
+        }
+
+        /// <summary>3.77.0-snapshot-10：把当前批注层叠到封面第一帧上（缩略图用）。</summary>
+        private static BitmapSource ComposeOnFrame(BitmapSource baseBmp, BitmapSource overlay)
+        {
+            try
+            {
+                int w = Math.Max(1, baseBmp.PixelWidth);
+                int h = Math.Max(1, baseBmp.PixelHeight);
+                var dv = new DrawingVisual();
+                using (DrawingContext dc = dv.RenderOpen())
+                {
+                    dc.DrawImage(baseBmp, new Rect(0, 0, w, h));
+                    dc.DrawImage(overlay, new Rect(0, 0, w, h));
+                }
+                var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(dv);
+                rtb.Freeze();
+                return rtb;
+            }
+            catch { return baseBmp; }
+        }
+
+        private FrameworkElement BuildCardPreview(string name, Color textColor)
+        {
+            BitmapSource? thumb = GetThumbPreviewBitmap();
+            bool showText = _thumbMode == PoolCover.ThumbMode.Default || _thumbShowText;
+
+            // 3.78（snapshot-3）：卡片宽度固定、高度按缩略图比例走 —— 与主界面卡片一致，
+            // 封面完整显示，不再出现「高度被裁掉 + 底下多一块灰矩形」。
+            const double baseWidth = 420;
+            double baseHeight = 130;
+            if (thumb != null && thumb.PixelWidth > 0)
+            {
+                double ratio = (double)thumb.PixelHeight / thumb.PixelWidth;
+                baseHeight = Math.Round(Math.Max(70, Math.Min(baseWidth * ratio, 680)));
+            }
+            _cardPreviewBaseSize = new Size(baseWidth, baseHeight);
+
+            var host = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            // 自定义模式还没导入图片：只给一块灰色小字占位
+            if (_thumbMode == PoolCover.ThumbMode.Custom && thumb == null)
+            {
+                host.Children.Add(new Border
+                {
+                    Width = baseWidth,
+                    Height = baseHeight,
+                    CornerRadius = _thumbRadius > 0.5 ? new CornerRadius(_thumbRadius) : new CornerRadius(0),
+                    Background = BrushRes("Bg_F0F0F0", Color.FromRgb(0xF0, 0xF0, 0xF0)),
+                    BorderBrush = BrushRes("Bd_CCCCCC", Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                    BorderThickness = new Thickness(1),
+                    Child = new TextBlock
+                    {
+                        Text = "暂未导入图片",
+                        FontSize = 14,
+                        Foreground = BrushRes("Fg_808080", Color.FromRgb(0x80, 0x80, 0x80)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                });
+                return host;
+            }
+
+            // 3.77（snapshot-3）：预览卡片按「未选中」样式渲染 —— 不要灰色蒙版、不要蓝色选中框。
+            host.Children.Add(BuildCardVisual(thumb, name, baseWidth, baseHeight, showText, textColor, false));
+            return host;
+        }
+
+        /// <summary>主界面卡池卡片的视觉：缩略图铺满 + 文字叠加（可关闭）。</summary>
+        private FrameworkElement BuildCardVisual(BitmapSource? thumb, string name, double width, double height,
+                                                 bool showText, Color textColor, bool selected)
+        {
+            var inner = new Grid { ClipToBounds = true };
+
+            // 3.77.0-snapshot-6：预览卡片以主界面卡片（宽 154、字号 16、圆角 radius、边框 1）为基准等比放大，
+            // 这样预览里的字重、字号、圆角弧度都与主界面保持一致。
+            const double mainCardWidth = 154.0;
+            double k = width / mainCardWidth;
+            double radius = _thumbRadius > 0.5 ? _thumbRadius * k : 0;
+
+            if (showText)
+            {
+                var tb = new TextBlock
+                {
+                    Text = name,
+                    FontSize = Math.Max(9, 16.0 * k),
+                    FontWeight = selected ? FontWeights.Bold : FontWeights.Normal,
+                    Foreground = new SolidColorBrush(textColor),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    Margin = new Thickness(8 * k, 4 * k, 8 * k, 4 * k),
+                };
+                // 3.78（snapshot-3）：卡片上的卡池名不再加文字阴影
+                inner.Children.Add(tb);
+            }
+
+            return new Border
+            {
+                Width = width,
+                Height = height,
+                CornerRadius = radius > 0.5 ? new CornerRadius(radius) : new CornerRadius(0),
+                ClipToBounds = true,
+                // 缩略图放在 Border.Background 上，圆角才会把图片一起裁掉
+                Background = thumb != null
+                    ? (Brush)new ImageBrush(thumb) { Stretch = Stretch.Uniform }
+                    : (selected ? BrushRes("Bg_E5F3FF", Color.FromRgb(0xE5, 0xF3, 0xFF))
+                                : BrushRes("Bg_F0F0F0", Color.FromRgb(0xF0, 0xF0, 0xF0))),
+                BorderBrush = selected ? BrushRes("Bd_0078D7", Color.FromRgb(0x00, 0x78, 0xD7))
+                                       : BrushRes("Bd_CCCCCC", Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                // 3.77.0-snapshot-8：有缩略图的模式不再套灰色外框（只有「默认」纯文字卡片保留 1px 描边）
+                BorderThickness = selected ? new Thickness(1.5 * k)
+                                           : (thumb != null ? new Thickness(0) : new Thickness(Math.Max(1.0, 1.0 * k))),
+                Child = inner,
+            };
+        }
+
+        private Brush BrushRes(string key, Color fallback)
+        {
+            try
+            {
+                if (TryFindResource(key) is Brush brush) return brush;
+            }
+            catch { }
+            return new SolidColorBrush(fallback);
+        }
+
+        private Color ThemeTextColor()
+        {
+            try
+            {
+                if (TryFindResource("Fg_333333") is SolidColorBrush brush) return brush.Color;
+            }
+            catch { }
+            return Color.FromRgb(0x33, 0x33, 0x33);
+        }
+
+        private void BtnImportThumb_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                    // 3.77.0-snapshot-8：缩略图只支持静态图片，GIF / 视频一律不收
+                var dlg = new OpenFileDialog
+                {
+                    Title = "选择封面缩略图",
+                    Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.tif;*.tiff|所有文件|*.*",
+                };
+                if (dlg.ShowDialog() != true) return;
+                if (string.IsNullOrEmpty(_poolDir)) return;
+
+                // 3.77.0-snapshot-8：缩略图只支持静态图片 —— GIF / 视频直接拒绝，不再「取第一帧」。
+                string thumbExt = Path.GetExtension(dlg.FileName).ToLowerInvariant();
+                string[] animatedExts = { ".gif", ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".m4v", ".webm" };
+                if (Array.IndexOf(animatedExts, thumbExt) >= 0)
+                {
+                    CustomMessageBox.Show(Window.GetWindow(this),
+                        "缩略图只支持静态图片（PNG / JPG / BMP / WEBP / TIFF）。\n\nGIF 和视频不能作为卡片缩略图，请换一张静态图片。",
+                        "不支持这个格式", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!PoolCover.SaveCustomThumb(_poolDir, dlg.FileName))
+                {
+                    CustomMessageBox.Show(Window.GetWindow(this), "这张图片无法读取，换一张再试试。", "导入失败",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                _thumbMode = PoolCover.ThumbMode.Custom;
+                PoolCover.SetThumbMode(_poolDir, PoolCover.ThumbMode.Custom);
+
+                _thumbSync = true;
+                try
+                {
+                    if (ThumbModeCustom != null) ThumbModeCustom.IsChecked = true;
+                }
+                finally { _thumbSync = false; }
+
+                UpdateThumbModeUi();
+                UpdateThumbImportButton();
+                RefreshThumbPreview();
+                NotifyThumbSettingsChanged();
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：导入封面缩略图失败"); }
+        }
+
+        private void ChkThumbShowText_Click(object sender, RoutedEventArgs e)
+        {
+            if (_thumbSync) return;
+            try
+            {
+                bool oldValue = _thumbShowText;
+                _thumbShowText = ChkThumbShowText.IsChecked == true;
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                    PoolCover.SetThumbShowText(_poolDir, _thumbShowText);
+                RefreshThumbPreview();
+                NotifyThumbSettingsChanged();
+                if (oldValue != _thumbShowText)
+                    PushThumbAction(new EditAction
+                    {
+                        Undo = () => ApplyThumbShowText(oldValue),
+                        Redo = () => ApplyThumbShowText(_thumbShowText),
+                    });
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：切换缩略图名字开关失败"); }
+        }
+
+        /// <summary>3.77.0-snapshot-10：撤销 / 恢复缩略图模式（只改状态与界面，不再压栈）。</summary>
+        private void ApplyThumbMode(PoolCover.ThumbMode mode)
+        {
+            try
+            {
+                _thumbMode = mode;
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                    PoolCover.SetThumbMode(_poolDir, mode);
+
+                _thumbSync = true;
+                if (ThumbModeDefault != null) ThumbModeDefault.IsChecked = mode == PoolCover.ThumbMode.Default;
+                if (ThumbModeCover != null) ThumbModeCover.IsChecked = mode == PoolCover.ThumbMode.Cover;
+                if (ThumbModeCustom != null) ThumbModeCustom.IsChecked = mode == PoolCover.ThumbMode.Custom;
+                _thumbSync = false;
+
+                UpdateThumbModeUi();
+                RefreshThumbPreview();
+                NotifyThumbSettingsChanged();
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-10：撤销 / 恢复「显示卡池名」。</summary>
+        private void ApplyThumbShowText(bool value)
+        {
+            try
+            {
+                _thumbShowText = value;
+                _thumbSync = true;
+                if (ChkThumbShowText != null) ChkThumbShowText.IsChecked = value;
+                _thumbSync = false;
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                    PoolCover.SetThumbShowText(_poolDir, value);
+                RefreshThumbPreview();
+                NotifyThumbSettingsChanged();
+            }
+            catch { }
+        }
+
+        private void BtnThumbTextColor_Click(object sender, RoutedEventArgs e)
+        {
+            OpenColorPanel(BtnThumbTextColor, ColorTarget.ThumbText);
+        }
+
+        private void BtnSaveAs_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!_hasMedia)
+                {
+                    CustomMessageBox.Show(Window.GetWindow(this), "请先导入封面图片、GIF 或视频。", "还没有封面",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                CommitActiveText();
+
+                bool isVideo = _isVideo || IsVideoCoverFile(_coverPath);
+                bool isGif = string.Equals(Path.GetExtension(_coverPath), ".gif", StringComparison.OrdinalIgnoreCase);
+                bool hasOverlay = HasUserOverlay();
+                bool customThumb = _thumbMode == PoolCover.ThumbMode.Custom;
+                string name = GetThumbPoolName();
+
+                // 视频 / GIF 不能压成静态帧：只在「没有批注、缩略图也不需要额外导出」时原样另存
+                if (!hasOverlay && !customThumb && (isVideo || isGif))
+                {
+                    string filter = isVideo
+                        ? "视频文件|*.mp4;*.avi;*.mkv;*.mov;*.wmv;*.m4v;*.webm|所有文件|*.*"
+                        : "GIF 图片|*.gif|所有文件|*.*";
+                    var save = new SaveFileDialog
+                    {
+                        Title = "另存为",
+                        FileName = name + "_封面" + Path.GetExtension(_coverPath),
+                        Filter = filter,
+                    };
+                    if (save.ShowDialog() != true) return;
+                    ExportOriginalMedia(save.FileName);
+                    return;
+                }
+
+                // 有批注或自定义缩略图 → 打包 ZIP；否则导出单张图片
+                if (hasOverlay || customThumb)
+                {
+                    var save = new SaveFileDialog
+                    {
+                        Title = "另存为压缩包",
+                        FileName = name + "_封面.zip",
+                        Filter = "ZIP 压缩包|*.zip",
+                    };
+                    if (save.ShowDialog() != true) return;
+                    ExportZip(save.FileName, name, hasOverlay, customThumb);
+                    return;
+                }
+
+                var img = new SaveFileDialog
+                {
+                    Title = "另存为图片",
+                    FileName = name + "_封面.png",
+                    Filter = "PNG 图片|*.png|JPEG 图片|*.jpg|BMP 图片|*.bmp|GIF 图片|*.gif|TIFF 图片|*.tif",
+                };
+                if (img.ShowDialog() != true) return;
+                ExportImage(img.FileName);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Error(ex, "封面编辑页：另存为失败");
+                CustomMessageBox.Show(Window.GetWindow(this), "另存为失败，请换个位置再试。", "另存为",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>用户自己加的批注（不含「编辑默认封面」时自动生成的卡池名称）。</summary>
+        private bool HasUserOverlay()
+        {
+            try
+            {
+                if (_texts.Count > 0) return true;
+                if (InkLayer.Strokes.Count > 0) return true;
+
+                // 3.77：保存过封面但什么都没画时，overlay 里也会留下一张全透明 PNG。
+                // 只看文件存不存在会把「单纯保存过的封面」误判成有批注，另存为就总是打包 ZIP 了。
+                if (!string.IsNullOrEmpty(_existingOverlayPath) && File.Exists(_existingOverlayPath))
+                    return OverlayHasVisiblePixels(_existingOverlayPath);
+
+                return false;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>批注图层里有没有真正看得见的像素（全透明 = 没有批注）。</summary>
+        private static bool OverlayHasVisiblePixels(string path)
+        {
+            try
+            {
+                var decoder = BitmapDecoder.Create(new Uri(path), BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
+                if (decoder.Frames.Count == 0) return false;
+
+                var frame = decoder.Frames[0];
+                BitmapSource src = frame.Format == PixelFormats.Bgra32 || frame.Format == PixelFormats.Pbgra32
+                    ? frame
+                    : new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+
+                int w = src.PixelWidth;
+                int h = src.PixelHeight;
+                if (w <= 0 || h <= 0) return false;
+
+                int stride = w * 4;
+                if ((long)stride * h > 64L * 1024 * 1024) return true; // 太大就别扫了，按有批注处理
+
+                var buffer = new byte[stride * h];
+                src.CopyPixels(buffer, stride, 0);
+                for (int i = 3; i < buffer.Length; i += 4)
+                {
+                    if (buffer[i] > 8) return true;
+                }
+                return false;
+            }
+            catch { return true; }
+        }
+
+        private static bool IsVideoCoverFile(string path)
+        {
+            string ext = Path.GetExtension(path ?? "").ToLowerInvariant();
+            return ext == ".mp4" || ext == ".avi" || ext == ".mkv" || ext == ".mov"
+                || ext == ".wmv" || ext == ".m4v" || ext == ".webm";
+        }
+
+        private void ExportOriginalMedia(string targetPath)
+        {
+            File.Copy(_coverPath, targetPath, true);
+            RuntimeLog.Info("封面编辑页：另存为原始媒体 " + targetPath);
+        }
+
+        private void ExportImage(string targetPath)
+        {
+            BitmapSource? frame = RenderStageBitmap(includeBase: true);
+            if (frame == null) frame = ImageHelper.LoadBitmapFromFile(_coverPath);
+            if (frame == null) throw new InvalidOperationException("封面画面为空");
+
+            EncodeBitmap(frame, targetPath);
+            RuntimeLog.Info("封面编辑页：另存为图片 " + targetPath);
+        }
+
+        private void ExportZip(string targetPath, string name, bool hasOverlay, bool customThumb)
+        {
+            string coverExt = Path.GetExtension(_coverPath);
+            if (string.IsNullOrEmpty(coverExt)) coverExt = ".png";
+
+            string overlay = hasOverlay ? RenderOverlay() : "";
+
+            using (var fs = File.Create(targetPath))
+            using (var archive = new System.IO.Compression.ZipArchive(fs, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                archive.CreateEntryFromFile(_coverPath, name + "_封面" + coverExt);
+
+                if (!string.IsNullOrEmpty(overlay) && File.Exists(overlay))
+                {
+                    var entry = archive.CreateEntry(name + "_批注.png");
+                    using var es = entry.Open();
+                    using var src = File.OpenRead(overlay);
+                    src.CopyTo(es);
+                }
+
+                if (customThumb)
+                {
+                    string thumbPath = PoolCover.GetCustomThumbPath(_poolDir);
+                    if (File.Exists(thumbPath))
+                    {
+                        var entry = archive.CreateEntry(name + "_缩略图.png");
+                        using var es = entry.Open();
+                        using var src = File.OpenRead(thumbPath);
+                        src.CopyTo(es);
+                    }
+                }
+            }
+
+            try { PoolCover.CleanupTempOverlays(); } catch { }
+            RuntimeLog.Info("封面编辑页：另存为压缩包 " + targetPath);
+        }
+
+        private static void EncodeBitmap(BitmapSource source, string path)
+        {
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            BitmapEncoder encoder =
+                ext == ".jpg" || ext == ".jpeg" ? new JpegBitmapEncoder { QualityLevel = 95 }
+                : ext == ".bmp" ? new BmpBitmapEncoder()
+                : ext == ".gif" ? new GifBitmapEncoder()
+                : ext == ".tif" || ext == ".tiff" ? new TiffBitmapEncoder()
+                : new PngBitmapEncoder();
+
+            BitmapSource frame = source;
+            // JPEG / BMP 没有透明通道：先垫白底，避免批注区域变成黑块
+            if (ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
+                frame = FlattenOnWhite(source);
+
+            encoder.Frames.Add(BitmapFrame.Create(frame));
+            using var fs = File.Create(path);
+            encoder.Save(fs);
+        }
+
+        private static BitmapSource FlattenOnWhite(BitmapSource source)
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, source.PixelWidth, source.PixelHeight));
+                dc.DrawImage(source, new Rect(0, 0, source.PixelWidth, source.PixelHeight));
+            }
+            var bmp = new RenderTargetBitmap(source.PixelWidth, source.PixelHeight, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(visual);
+            bmp.Freeze();
+            return bmp;
         }
 
         /// <summary>
@@ -2127,14 +3640,54 @@ namespace RandomDrawer
         }
 
         /// <summary>3.40.1：鼠标停在荧光样式箭头上时，左侧荧光笔图标一起变深色（像整组按钮在悬浮）。</summary>
+        private bool _highlightHover;
+
+        /// <summary>3.77.0-snapshot-5：鼠标停在右侧下拉箭头上。</summary>
+        private bool _highlightArrowHover;
+
+        private void BtnHighlight_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _highlightHover = true;
+            UpdateHighlightMenuHover();
+        }
+
+        private void BtnHighlight_MouseLeave(object sender, MouseEventArgs e)
+        {
+            _highlightHover = false;
+            UpdateHighlightMenuHover();
+        }
+
         private void BtnHighlightMenu_MouseEnter(object sender, MouseEventArgs e)
         {
-            try { HighlightSwatch?.SetResourceReference(TextBlock.ForegroundProperty, "Fg_000000"); } catch { }
+            _highlightArrowHover = true;
+            UpdateHighlightMenuHover();
         }
 
         private void BtnHighlightMenu_MouseLeave(object sender, MouseEventArgs e)
         {
-            try { HighlightSwatch?.ClearValue(TextBlock.ForegroundProperty); } catch { }
+            _highlightArrowHover = false;
+            UpdateHighlightMenuHover();
+        }
+
+        /// <summary>3.77.0-snapshot-5：荧光笔和右侧下拉箭头是一整组 ——
+        /// 鼠标停在荧光笔或箭头上时，两者背景以同一深浅一起加深（不再让箭头单独更深，
+        /// 否则中间会断开、看起来像两个分开的按钮）。</summary>
+        private void UpdateHighlightMenuHover()
+        {
+            try
+            {
+                if (BtnHighlightMenu == null) return;
+
+                bool arrowHot = false;
+                try { arrowHot = BtnHighlightMenu.IsMouseOver; } catch { }
+
+                bool hot = _highlightHover || _highlightArrowHover || arrowHot;
+
+                // 3.77.0-snapshot-6：悬浮荧光笔 → 整块一起加深；鼠标移到箭头上 → 箭头那一块再深一档。
+                try { BtnHighlightMenu.Tag = arrowHot ? "hotdeep" : (hot ? "hot" : null); } catch { }
+                try { if (BtnHighlight != null) BtnHighlight.Tag = hot ? "hot" : null; } catch { }
+            }
+            catch { }
         }
 
         private void AddHighlightMenuItem(ContextMenu menu, Style? itemStyle, Color color, bool underline, string text)
@@ -2193,7 +3746,14 @@ namespace RandomDrawer
             try
             {
                 if (BtnPaintColor != null)
-                    BtnPaintColor.Visibility = _mode == ToolMode.Eraser ? Visibility.Collapsed : Visibility.Visible;
+                {
+                    // 3.77（snapshot-3）：橡皮擦模式下不再把「颜色」整个藏起来 ——
+                    // 方块突然消失会被当成渲染错误；改成灰化保留，块一直看得见。
+                    BtnPaintColor.Visibility = Visibility.Visible;
+                    bool enabled = _mode != ToolMode.Eraser;
+                    BtnPaintColor.IsEnabled = enabled;
+                    BtnPaintColor.Opacity = enabled ? 1.0 : 0.45;
+                }
             }
             catch { }
         }
@@ -2250,6 +3810,11 @@ namespace RandomDrawer
             {
                 ClearSelection();
             }
+
+            // 3.77（snapshot-3）：切换工具后校正一次左侧工具组 ——
+            // 页签淡入淡出如果被打断，ToolGroupRoot 会停在 Opacity 0，
+            // 整排工具看起来「凭空消失」（文字 / 绘图页签都会中招）。
+            UpdateToolVisibility(_ribbonTab);
         }
 
         private void UpdateToolVisuals()
@@ -2265,6 +3830,9 @@ namespace RandomDrawer
             SetToggle(BtnHighlight, !picking && _mode == ToolMode.Highlight);
             if (BtnSelectTool != null) SetToggle(BtnSelectTool, !picking && _mode == ToolMode.Select);
             if (BtnEyedropper != null) SetToggle(BtnEyedropper, picking);
+            // 3.77.0-snapshot-8：绘图页签有自己的一套「选择 / 荧光笔」按钮，选中态要一起同步
+            if (BtnSelectToolDraw != null) SetToggle(BtnSelectToolDraw, !picking && _mode == ToolMode.Select);
+            if (BtnHighlightDraw != null) SetToggle(BtnHighlightDraw, !picking && _mode == ToolMode.Highlight);
         }
 
         private static void SetToggle(Button button, bool on)
@@ -2456,7 +4024,7 @@ namespace RandomDrawer
         // 拖动色块 / 选常用色 / 输十六进制都立即生效；点面板外自动收起。
         // ================================================================
 
-        private enum ColorTarget { Text, Pen, Highlight }
+        private enum ColorTarget { Text, Pen, Highlight, ThumbText }
 
         private ColorTarget _colorTarget = ColorTarget.Text;
         private TextItem? _colorTargetText;
@@ -2469,10 +4037,6 @@ namespace RandomDrawer
         private Color _colorBeforePanel;
         private DateTime _colorPopupClosedUtc;
         private Button? _colorPopupClosedButton;
-        private HintBubble? _textColorHint;
-        private HintBubble? _paintColorHint;
-        /// <summary>3.40.1：荧光笔的提示语按页签切换（文字页签加荧光 / 绘图页签涂抹）。</summary>
-        private HintBubble? _highlightHint;
 
         private void BtnTextColor_Click(object sender, RoutedEventArgs e)
         {
@@ -2511,6 +4075,7 @@ namespace RandomDrawer
 
                 Color current = kind == ColorTarget.Text ? _textColor
                               : kind == ColorTarget.Highlight ? _highlightColor
+                              : kind == ColorTarget.ThumbText ? (_thumbTextColor ?? ThemeTextColor())
                               : _penColor;
                 _colorBeforePanel = current;
                 // 3.33：文字 / 画笔共用一个「颜色」面板（作用对象由入口决定）
@@ -2524,9 +4089,6 @@ namespace RandomDrawer
                 ColorPopup.HorizontalOffset = target.ActualWidth / 2 - 31 - 20;
                 ColorPopup.VerticalOffset = 0;
                 ColorPopup.IsOpen = true;
-
-                if (kind == ColorTarget.Text) _textColorHint?.Hide();
-                else _paintColorHint?.Hide();
             }
             catch (Exception ex)
             {
@@ -2591,6 +4153,9 @@ namespace RandomDrawer
             _colorPopupClosedUtc = DateTime.UtcNow;
             _colorPopupClosedButton = _colorPopupButton;
             _colorPopupButton = null;
+
+            // 缩略图文字颜色是直接写盘的，关闭面板时刷新一次主页卡片
+            if (_colorTarget == ColorTarget.ThumbText) NotifyThumbSettingsChanged();
         }
 
         /// <summary>面板里颜色一变就应用：文字改当前 / 最近文本框，画笔 / 荧光笔记住各自颜色。</summary>
@@ -2618,6 +4183,17 @@ namespace RandomDrawer
                         UpdatePaintColorSwatch();
                         ApplyDrawingAttributes();
                         MarkDirty();
+                        break;
+
+                    case ColorTarget.ThumbText:
+                        _thumbTextColor = color;
+                        if (ThumbTextColorSwatch != null)
+                            ThumbTextColorSwatch.Background = new SolidColorBrush(color);
+                            if (ThumbTextColorSwatchBlock != null) ThumbTextColorSwatchBlock.Background = ThumbTextColorSwatch.Background;
+                        if (!string.IsNullOrEmpty(_poolDir))
+                            PoolCover.SetThumbTextColor(_poolDir, color);
+                        MarkDirty();
+                        RefreshThumbPreview();
                         break;
 
                     default:
@@ -2821,6 +4397,12 @@ namespace RandomDrawer
             try { Stage.Focus(); Keyboard.Focus(Stage); } catch { }
         }
 
+        /// <summary>3.77.0-snapshot-5：绘图页签工具组里的「选择」按钮（与文字页签同一个工具）。</summary>
+        private void BtnSelectToolDraw_Click(object sender, RoutedEventArgs e) => BtnSelectTool_Click(sender, e);
+
+        /// <summary>3.77.0-snapshot-5：绘图页签工具组里的「荧光笔」按钮（自由涂抹高亮）。</summary>
+        private void BtnHighlightDraw_Click(object sender, RoutedEventArgs e) => BtnHighlight_Click(sender, e);
+
         private bool HasSelection
             => _hasSelRect && _selRect.Width >= 1 && _selRect.Height >= 1;
 
@@ -2829,7 +4411,11 @@ namespace RandomDrawer
         {
             try
             {
-                if (_rasterBitmap == null) FlattenVectorsIntoRaster(recordUndo: true);
+                // 3.77（snapshot-3）：还在矢量层上的文字 / 笔迹必须先烘焙进来，
+                // 否则框选移动只拖动已有像素，看上去就是「框选区域带不动批注」。
+                bool hasVectors = (_texts != null && _texts.Count > 0)
+                                  || (InkLayer != null && InkLayer.Strokes.Count > 0);
+                if (_rasterBitmap == null || hasVectors) FlattenVectorsIntoRaster(recordUndo: true);
                 EnsureRasterWritable();
             }
             catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：准备批注位图失败"); }
@@ -2844,7 +4430,8 @@ namespace RandomDrawer
                 Stroke = new SolidColorBrush(SelectAccent),
                 StrokeThickness = 2,
                 StrokeDashArray = new DoubleCollection(new double[] { 4, 3 }),
-                Fill = new SolidColorBrush(Color.FromArgb(0x14, 0x00, 0x78, 0xD7)),
+                // 3.77.0-snapshot-4：框选区不再填半透明蓝底，只留虚线边框
+                Fill = null,
                 IsHitTestVisible = false,
                 Visibility = Visibility.Collapsed
             };
@@ -2853,16 +4440,76 @@ namespace RandomDrawer
             return _selectFrame;
         }
 
+        // 3.77.0-snapshot-10：选区框的显示角度（旋转松手后框保持倾斜，用户要求）。0 表示正放。
+        private double _selFrameAngle;
+
         private void ShowSelectFrame(Rect rect)
         {
             try
             {
                 var frame = EnsureSelectFrame();
+                // 3.77.0-snapshot-8：新框选沿用上次旋转角度是错的，显示前先把变换归零
+                ResetSelectFrameTransform();
                 Canvas.SetLeft(frame, rect.X);
                 Canvas.SetTop(frame, rect.Y);
                 frame.Width = Math.Max(1, rect.Width);
                 frame.Height = Math.Max(1, rect.Height);
                 frame.Visibility = Visibility.Visible;
+
+                // 3.77.0-snapshot-10：旋转过的选区，框要跟着保持倾斜（而不是回正成外接矩形）
+                _selRotateCenter = new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+                if (Math.Abs(_selFrameAngle) > 0.05) ApplySelRotateAngle(_selFrameAngle);
+                else UpdateSelRotateHandle(rect);
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-5：选区上方的旋转把手（和文本框工具的一致）。</summary>
+        private void UpdateSelRotateHandle(Rect rect)
+        {
+            try
+            {
+                if (SelectionLayer == null) return;
+
+                if (_mode != ToolMode.Select || rect.IsEmpty || rect.Width < 4 || rect.Height < 4)
+                {
+                    if (_selRotateHandle != null) _selRotateHandle.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                if (_selRotateHandle == null)
+                {
+                    var icon = new TextBlock
+                    {
+                        Text = "\uE7AD",
+                        FontSize = 12,
+                        Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x33, 0x33, 0x33)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    try { icon.FontFamily = (FontFamily)FindResource("AppIconFont"); } catch { }
+
+                    _selRotateHandle = new Border
+                    {
+                        Width = 22,
+                        Height = 22,
+                        CornerRadius = new CornerRadius(11),
+                        Background = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+                        BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x33, 0x33, 0x33)),
+                        BorderThickness = new Thickness(1.2),
+                        Cursor = Cursors.Arrow,
+                        Child = icon
+                    };
+                    _selRotateHandle.MouseLeftButtonDown += SelRotateHandle_MouseDown;
+                    _selRotateHandle.MouseMove += SelRotateHandle_MouseMove;
+                    _selRotateHandle.MouseLeftButtonUp += SelRotateHandle_MouseUp;
+                    Panel.SetZIndex(_selRotateHandle, 11);
+                    SelectionLayer.Children.Add(_selRotateHandle);
+                }
+
+                Canvas.SetLeft(_selRotateHandle, rect.X + rect.Width / 2 - 11);
+                Canvas.SetTop(_selRotateHandle, Math.Max(-4, rect.Y - 30));
+                _selRotateHandle.Visibility = Visibility.Visible;
             }
             catch { }
         }
@@ -2875,10 +4522,15 @@ namespace RandomDrawer
             _selectMoving = false;
             _moveWholeSnapshot = null;
             _moveBlock = null;
+            // 3.77.0-snapshot-10：取消选区时把「倾斜显示」也归零，下一次框选是正放的框
+            _selFrameAngle = 0;
+            _selRotateAabbDip = Rect.Empty;
+            _selectMoveAabbStart = Rect.Empty;
 
             try
             {
                 if (_selectFrame != null) _selectFrame.Visibility = Visibility.Collapsed;
+                if (_selRotateHandle != null) _selRotateHandle.Visibility = Visibility.Collapsed;
             }
             catch { }
         }
@@ -2906,7 +4558,10 @@ namespace RandomDrawer
         private Int32Rect SelectionPixelRect()
         {
             if (_rasterBitmap == null) return new Int32Rect(0, 0, 0, 0);
-            return ToPixelRect(_selRect, _rasterBitmap.PixelWidth, _rasterBitmap.PixelHeight,
+            // 3.77.0-snapshot-10：旋转过的选区，框是倾斜的（_selRect 只是显示用的原大小框），
+            // 真正要抓/清/移动的像素范围是它的外接矩形。
+            Rect rect = Math.Abs(_selFrameAngle) > 0.05 && !_selRotateAabbDip.IsEmpty ? _selRotateAabbDip : _selRect;
+            return ToPixelRect(rect, _rasterBitmap.PixelWidth, _rasterBitmap.PixelHeight,
                                Math.Max(1, Stage.ActualWidth), Math.Max(1, Stage.ActualHeight));
         }
 
@@ -2932,7 +4587,8 @@ namespace RandomDrawer
             if (_rasterBitmap == null || rect.Width <= 0 || rect.Height <= 0) return null;
             int stride = rect.Width * 4;
             var buf = new byte[stride * rect.Height];
-            try { _rasterBitmap.CopyPixels(rect, buf, stride, 0); } catch { return null; }
+            try { _rasterBitmap.CopyPixels(rect, buf, stride, 0); }
+            catch (Exception ex) { RuntimeLog.Error(ex, $"封面编辑页：截取选区块失败 rect={rect.X},{rect.Y},{rect.Width},{rect.Height}"); return null; }
             return buf;
         }
 
@@ -3076,14 +4732,17 @@ namespace RandomDrawer
             _selectMoving = true;
             _selectMoveStart = p;
             _selectMoveRect = _selRect;
+            _selectMoveAabbStart = _selRotateAabbDip;
 
             _moveWholeSnapshot = CaptureAllPixels();
             var rect = SelectionPixelRect();
             _moveBlock = CaptureRegion(rect);
             _moveBlockRect = rect;
 
-            // 先「提起」这块像素（原位置变透明），拖动时再画到目标位置
-            ClearRegion(rect);
+
+            // 3.77.0-snapshot-4：这里不再先 ClearRegion —— 提前把原位置抠空会让批注在
+            // 第一次 MouseMove 之前凭空消失一帧（用户看到的「闪一下」）。真正的「提起」
+            // 交给 MoveSelectionBy：它每次都从整张快照恢复、清空选区块、再画到目标位置。
 
             try { Stage.CaptureMouse(); } catch { }
         }
@@ -3101,9 +4760,14 @@ namespace RandomDrawer
                 int py = (int)Math.Round(dy * (_rasterBitmap.PixelHeight / Math.Max(1, Stage.ActualHeight)));
                 BlendBlockAt(_moveBlock, _moveBlockRect, _moveBlockRect.X + px, _moveBlockRect.Y + py);
 
+
                 var moved = new Rect(_selectMoveRect.X + dx, _selectMoveRect.Y + dy,
                                      _selectMoveRect.Width, _selectMoveRect.Height);
                 _selRect = moved;
+                // 3.77.0-snapshot-10：倾斜显示时，像素范围（外接矩形）跟着一起平移
+                if (!_selRotateAabbDip.IsEmpty)
+                    _selRotateAabbDip = new Rect(_selRotateAabbDip.X + dx, _selRotateAabbDip.Y + dy,
+                                                 _selRotateAabbDip.Width, _selRotateAabbDip.Height);
                 _hasSelRect = true;
                 ShowSelectFrame(moved);
             }
@@ -3131,8 +4795,12 @@ namespace RandomDrawer
                 var startDip = _selectMoveRect;
                 var endDip = _selRect;
 
-                var startRect = ToPixelRect(startDip, bw, bh, stageW, stageH);
-                var endRect = ToPixelRect(endDip, bw, bh, stageW, stageH);
+                // 3.77.0-snapshot-10：倾斜显示时，内容实际占的是外接矩形，undo 区域要按它算
+                var startBase = !_selectMoveAabbStart.IsEmpty ? _selectMoveAabbStart : startDip;
+                var endBase = !_selRotateAabbDip.IsEmpty ? _selRotateAabbDip : endDip;
+
+                var startRect = ToPixelRect(startBase, bw, bh, stageW, stageH);
+                var endRect = ToPixelRect(endBase, bw, bh, stageW, stageH);
                 var area = UnionRect(startRect, endRect);
 
                 var before = CropFromWhole(_moveWholeSnapshot, bw, area);
@@ -3156,6 +4824,7 @@ namespace RandomDrawer
                     {
                         RestoreRegion(area, before);
                         _selRect = startDip;
+                        _selRotateAabbDip = startBase;
                         _hasSelRect = true;
                         ShowSelectFrame(startDip);
                     },
@@ -3163,6 +4832,7 @@ namespace RandomDrawer
                     {
                         RestoreRegion(area, after);
                         _selRect = endDip;
+                        _selRotateAabbDip = endBase;
                         _hasSelRect = true;
                         ShowSelectFrame(endDip);
                     }
@@ -3171,6 +4841,405 @@ namespace RandomDrawer
                 MarkDirty();
             }
             catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：移动选区失败"); }
+        }
+
+        // ---------------------------------------------------------------
+        // 旋转选区（3.77.0-snapshot-5）
+        // ---------------------------------------------------------------
+
+        // ---------------------------------------------------------------
+        // 旋转选区（3.77.0-snapshot-5）
+        // 做法和文本框旋转完全一致：拖动时只改 RenderTransform（不碰像素），
+        // 松手时再把旋转后的样子一次性烘焙回批注层。
+        // ---------------------------------------------------------------
+
+        /// <summary>3.77.0-snapshot-9：把手的命中用几何判定，不依赖命中测试。</summary>
+        private bool TryHitSelRotateHandle(Point p)
+        {
+
+            if (_selRotateHandle == null || _selRotateHandle.Visibility != Visibility.Visible) return false;
+
+            try
+            {
+                double x = Canvas.GetLeft(_selRotateHandle);
+                double y = Canvas.GetTop(_selRotateHandle);
+                if (double.IsNaN(x) || double.IsNaN(y)) return false;
+
+                double w = _selRotateHandle.Width > 0 ? _selRotateHandle.Width : 22;
+                double h = _selRotateHandle.Height > 0 ? _selRotateHandle.Height : 22;
+                const double pad = 4;
+
+                return p.X >= x - pad && p.X <= x + w + pad && p.Y >= y - pad && p.Y <= y + h + pad;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>开始一次选区旋转（把手的 MouseDown 与 Preview 里的几何命中都走这里）。</summary>
+        /// <summary>3.77.0-snapshot-14：按「逻辑框 + 倾斜角度」算外接矩形。
+        /// 反复旋转时用它换算，避免每次都拿上一次的外接矩形当新框 —— 那会让框在接近 45° 时逐次变大。</summary>
+        private static Rect ComputeSelAabb(Rect logical, double angleDeg)
+        {
+            double rad = angleDeg * Math.PI / 180.0;
+            double hw = logical.Width / 2.0, hh = logical.Height / 2.0;
+            double aw = Math.Abs(hw * Math.Cos(rad)) + Math.Abs(hh * Math.Sin(rad));
+            double ah = Math.Abs(hw * Math.Sin(rad)) + Math.Abs(hh * Math.Cos(rad));
+            return new Rect(logical.X + logical.Width / 2.0 - aw,
+                             logical.Y + logical.Height / 2.0 - ah,
+                             aw * 2, ah * 2);
+        }
+
+        private void BeginSelRotate(Point mouse)
+        {
+            if (!HasSelection || _rasterBitmap == null) return;
+
+            try
+            {
+                _selRotating = true;
+                // 3.77.0-snapshot-11 修正（第二次旋转起）：上一次旋转后选区框是倾斜的，
+                // 它的 _selRect 仍是倾斜前的尺寸，而像素实际占的是外接矩形。
+                // 若直接用 _selRect 做块，尺寸与像素不一致 → 拉伸+错位+复制。
+                // 因此当框处于倾斜状态时，直接用外接矩形当本次的块（与像素范围一致）。
+                _selRotateStartRect = (Math.Abs(_selFrameAngle) > 0.05
+                                       && _selRotateAabbDip.Width > 0.5
+                                       && _selRotateAabbDip.Height > 0.5)
+                    ? _selRotateAabbDip
+                    : _selRect;
+                _selRotateCenter = new Point(_selRotateStartRect.X + _selRotateStartRect.Width / 2,
+                                             _selRotateStartRect.Y + _selRotateStartRect.Height / 2);
+                _selRotateStartMouseAngle = Math.Atan2(mouse.Y - _selRotateCenter.Y, mouse.X - _selRotateCenter.X);
+                _selRotateAccum = 0;
+                // 3.77.0-snapshot-13：记住框已经倾斜的角度。本次拖动只叠加「增量」，
+                // 否则第二次旋转会把框的角度重置成纯增量 —— 表现为「一按把手框就回正」。
+                _selRotateBaseAngle = _selFrameAngle;
+                _selRotateSnapshot = CaptureAllPixels();
+                _selRotateBlockRect = SelectionPixelRect();
+                _selRotateBlock = CropSelection();
+
+                // 3.77.0-snapshot-10: ghost image so the selected block rotates live during drag
+                if (_selRotateBlock != null && SelectionLayer != null && _rasterBitmap != null)
+                {
+                    if (_selRotateGhost == null)
+                    {
+                        _selRotateGhost = new Image { Stretch = Stretch.Fill, IsHitTestVisible = false };
+                        Panel.SetZIndex(_selRotateGhost, 9);
+                        SelectionLayer.Children.Add(_selRotateGhost);
+                    }
+
+                    _selRotateGhost.Source = _selRotateBlock;
+                    _selRotateGhost.Visibility = Visibility.Visible;
+                    _selRotateGhost.RenderTransformOrigin = new Point(0.5, 0.5);
+                    _selRotateGhost.RenderTransform = new RotateTransform(0);
+                    Canvas.SetLeft(_selRotateGhost, _selRotateStartRect.X);
+                    Canvas.SetTop(_selRotateGhost, _selRotateStartRect.Y);
+                    _selRotateGhost.Width = _selRotateStartRect.Width;
+                    _selRotateGhost.Height = _selRotateStartRect.Height;
+
+                    ClearRegion(_selRotateBlockRect);
+                }
+
+                try { _selRotateHandle?.CaptureMouse(); } catch { }
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：开始旋转选区失败"); }
+        }
+
+        private void SelRotateHandle_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            BeginSelRotate(e.GetPosition(Stage));
+            e.Handled = true;
+        }
+
+        private void SelRotateHandle_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_selRotating || _selRotateBlock == null) return;
+
+            try
+            {
+                var mouse = e.GetPosition(Stage);
+                double now = Math.Atan2(mouse.Y - _selRotateCenter.Y, mouse.X - _selRotateCenter.X);
+                double delta = now - _selRotateStartMouseAngle;
+                // 跨过 ±π 时补一圈，避免转着转着突然反向
+                if (delta > Math.PI) delta -= Math.PI * 2;
+                else if (delta < -Math.PI) delta += Math.PI * 2;
+
+                _selRotateAccum += delta;
+                _selRotateStartMouseAngle = now;
+
+                ApplySelRotateAngle(_selRotateAccum * 180.0 / Math.PI);
+            }
+            catch { }
+        }
+
+        /// <summary>和文本框的 ApplyItemAngle 一样：只换 RenderTransform，渲染交给 WPF。</summary>
+        /// <summary>
+        /// 3.77.0-snapshot-11: rotate the selected block inside the raster at pixel level.
+        /// Inverse-maps each destination pixel around the block center and alpha-blends the
+        /// source pixel on top of the snapshot, so nothing else in the AABB is touched.
+        /// </summary>
+        private void BakeRotatedBlockIntoRaster(double degrees)
+        {
+            if (_rasterBitmap == null || _selRotateSnapshot == null) return;
+
+            int bw = _rasterBitmap.PixelWidth, bh = _rasterBitmap.PixelHeight;
+            int stride = bw * 4;
+            var src = _selRotateSnapshot;
+            var dst = new byte[src.Length];
+            Buffer.BlockCopy(src, 0, dst, 0, src.Length);
+
+            var block = _selRotateBlockRect;
+            int bx = block.X, by = block.Y, bww = block.Width, bhh = block.Height;
+            if (bww < 2 || bhh < 2 || bx < 0 || by < 0 || bx + bww > bw || by + bhh > bh) return;
+
+            for (int y = by; y < by + bhh; y++)
+            {
+                int off = y * stride + bx * 4;
+                for (int x = 0; x < bww; x++)
+                {
+                    dst[off] = 0; dst[off + 1] = 0; dst[off + 2] = 0; dst[off + 3] = 0;
+                    off += 4;
+                }
+            }
+
+            double rad = degrees * Math.PI / 180.0;
+            double cos = Math.Cos(rad), sin = Math.Sin(rad);
+            double cx = bx + bww / 2.0, cy = by + bhh / 2.0;
+            double hw = bww / 2.0, hh = bhh / 2.0;
+
+            int minX = bw, minY = bh, maxX = 0, maxY = 0;
+            double[] xs = { -hw, hw, -hw, hw };
+            double[] ys = { -hh, -hh, hh, hh };
+            for (int k = 0; k < 4; k++)
+            {
+                double px = cx + xs[k] * cos - ys[k] * sin;
+                double py = cy + xs[k] * sin + ys[k] * cos;
+                minX = (int)Math.Floor(Math.Min(minX, px));
+                maxX = (int)Math.Ceiling(Math.Max(maxX, px));
+                minY = (int)Math.Floor(Math.Min(minY, py));
+                maxY = (int)Math.Ceiling(Math.Max(maxY, py));
+            }
+            minX = Math.Max(0, minX); minY = Math.Max(0, minY);
+            maxX = Math.Min(bw, maxX); maxY = Math.Min(bh, maxY);
+
+            for (int y = minY; y < maxY; y++)
+            {
+                for (int x = minX; x < maxX; x++)
+                {
+                    double dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+                    double sx = cx + dx * cos + dy * sin;
+                    double sy = cy - dx * sin + dy * cos;
+                    if (sx < bx || sx >= bx + bww || sy < by || sy >= by + bhh) continue;
+
+                    int ix = (int)sx, iy = (int)sy;
+                    if (ix < 0 || iy < 0 || ix >= bw || iy >= bh) continue;
+
+                    int so = iy * stride + ix * 4;
+                    int doff = y * stride + x * 4;
+                    int sa = src[so + 3];
+                    if (sa == 0) continue;
+
+                    if (sa == 255)
+                    {
+                        dst[doff] = src[so];
+                        dst[doff + 1] = src[so + 1];
+                        dst[doff + 2] = src[so + 2];
+                        dst[doff + 3] = 255;
+                    }
+                    else
+                    {
+                        int inv = 255 - sa;
+                        dst[doff] = (byte)Math.Min(255, src[so] + dst[doff] * inv / 255);
+                        dst[doff + 1] = (byte)Math.Min(255, src[so + 1] + dst[doff + 1] * inv / 255);
+                        dst[doff + 2] = (byte)Math.Min(255, src[so + 2] + dst[doff + 2] * inv / 255);
+                        dst[doff + 3] = (byte)Math.Min(255, sa + dst[doff + 3] * inv / 255);
+                    }
+                }
+            }
+
+            _rasterBitmap.WritePixels(new Int32Rect(0, 0, bw, bh), dst, stride, 0);
+        }
+
+
+        private void ApplySelRotateAngle(double degrees)
+        {
+            try
+            {
+                // 3.77.0-snapshot-13：degrees 是「本次拖动」的增量，ghost 里的像素已经是
+                // 上一次旋转后的结果，可以直接用它；但选区框要显示的是累加后的总角度。
+                double frameAngle = _selRotateBaseAngle + degrees;
+
+                if (_selectFrame != null)
+                {
+                    _selectFrame.RenderTransformOrigin = new Point(0.5, 0.5);
+                    _selectFrame.RenderTransform = new RotateTransform(frameAngle);
+                }
+
+                if (_selRotateGhost != null && _selRotateGhost.Visibility == Visibility.Visible)
+                {
+                    _selRotateGhost.RenderTransformOrigin = new Point(0.5, 0.5);
+                    _selRotateGhost.RenderTransform = new RotateTransform(degrees);
+                }
+
+                if (_selRotateHandle != null && _selRotateHandle.Visibility == Visibility.Visible)
+                {
+                    Point top = RotateVector(new Point(0, -_selRect.Height / 2 - 30), frameAngle);
+                    Canvas.SetLeft(_selRotateHandle, _selRotateCenter.X + top.X - 11);
+                    Canvas.SetTop(_selRotateHandle, _selRotateCenter.Y + top.Y - 11);
+                }
+            }
+            catch { }
+        }
+
+        private void SelRotateHandle_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_selRotating) return;
+            _selRotating = false;
+            try { _selRotateHandle?.ReleaseMouseCapture(); } catch { }
+
+            try
+            {
+                double degrees = _selRotateAccum * 180.0 / Math.PI;
+
+                if (_rasterBitmap == null || _selRotateBlock == null || Math.Abs(degrees) < 0.05)
+                {
+                    // 没转成：原像素放回去，选区保持原样
+                    if (_selRotateSnapshot != null) RestoreAllPixels(_selRotateSnapshot);
+                    RemoveSelRotateGhost();
+                    ResetSelectFrameTransform();
+                    ShowSelectFrame(_selRotateStartRect);
+                    CleanupSelRotate();
+                    return;
+                }
+
+                int bw = _rasterBitmap.PixelWidth, bh = _rasterBitmap.PixelHeight;
+                double stageW = Math.Max(1, Stage.ActualWidth), stageH = Math.Max(1, Stage.ActualHeight);
+
+                var blockDip = _selRotateStartRect;
+                double cx = blockDip.X + blockDip.Width / 2, cy = blockDip.Y + blockDip.Height / 2;
+                var blockPx = ToPixelRect(blockDip, bw, bh, stageW, stageH);
+
+                // RenderTargetBitmap 是像素画布，这里全部用像素坐标绘制（DIP 混用会画成空白）
+                double pcx = blockPx.X + blockPx.Width / 2.0;
+                double pcy = blockPx.Y + blockPx.Height / 2.0;
+                var srcPx = new Rect(blockPx.X, blockPx.Y, blockPx.Width, blockPx.Height);
+
+                // 3.77.0-snapshot-10：只画「旋转后的块」，画布尺寸就是它的外接矩形，其余保持透明。
+                // 之前先铺整幅快照当底，会让原位置的批注留在画布上 —— 松手后看起来像「复制了一份」。
+                double totalDeg = _selRotateBaseAngle + degrees;
+                double rad = totalDeg * Math.PI / 180.0;
+                double hw = blockDip.Width / 2.0, hh = blockDip.Height / 2.0;
+                double aw = Math.Abs(hw * Math.Cos(rad)) + Math.Abs(hh * Math.Sin(rad));
+                double ah = Math.Abs(hw * Math.Sin(rad)) + Math.Abs(hh * Math.Cos(rad));
+                var aabbDip = new Rect(cx - aw, cy - ah, aw * 2, ah * 2);
+                if (aabbDip.Width < 4 || aabbDip.Height < 4) aabbDip = blockDip;
+                var aabbPx = ToPixelRect(aabbDip, bw, bh, stageW, stageH);
+
+                int aabbW = Math.Max(1, aabbPx.Width);
+                int aabbH = Math.Max(1, aabbPx.Height);
+                double originX = aabbPx.X, originY = aabbPx.Y;
+
+                // 3.77.0-snapshot-11: rotate at pixel level (no RenderTargetBitmap, no DIP-vs-pixel mixing)
+                RestoreAllPixels(_selRotateSnapshot!);
+                var before = _selRotateSnapshot;
+                BakeRotatedBlockIntoRaster(degrees);
+
+                var after = CaptureAllPixels();
+
+                RemoveSelRotateGhost();
+
+                // 3.77.0-snapshot-10：框保持原大小、保持倾斜；像素操作范围记在外接矩形里。
+                // 3.77.0-snapshot-14：_selRect 始终保存「逻辑框」（用户框选时的尺寸），倾斜角度单独记；
+                // 外接矩形每次由 ComputeSelAabb 现算，避免反复旋转时把上次的 AABB 当新框（45° 附近会越转越大）。
+                _selRotateAabbDip = ComputeSelAabb(_selRect, totalDeg);
+                _hasSelRect = true;
+                _selFrameAngle = totalDeg;
+                _selRotateCenter = new Point(cx, cy);
+                ShowSelectFrame(_selRect);
+                ApplySelRotateAngle(degrees);
+
+                CleanupSelRotate();
+
+                if (before == null || after == null) return;
+
+                _undo.Push(new EditAction
+                {
+                    Undo = () =>
+                    {
+                        RestoreAllPixels(before);
+                        // 逻辑框一直不变，撤销只把角度恢复到旋转前那一次的角度。
+                        _selFrameAngle = _selRotateBaseAngle;
+                        _selRotateAabbDip = Math.Abs(_selRotateBaseAngle) > 0.05
+                            ? ComputeSelAabb(_selRect, _selRotateBaseAngle)
+                            : Rect.Empty;
+                        _hasSelRect = true;
+                        ResetSelectFrameTransform();
+                        ShowSelectFrame(_selRect);
+                        if (Math.Abs(_selFrameAngle) > 0.05) ApplySelRotateAngle(0);
+                    },
+                    Redo = () =>
+                    {
+                        RestoreAllPixels(after);
+                        _selFrameAngle = _selRotateBaseAngle + degrees;
+                        _selRotateAabbDip = ComputeSelAabb(_selRect, _selFrameAngle);
+                        _hasSelRect = true;
+                        ResetSelectFrameTransform();
+                        ShowSelectFrame(_selRect);
+                        ApplySelRotateAngle(degrees);
+                    }
+                });
+                _redo.Clear();
+                MarkDirty();
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：旋转选区失败"); }
+        }
+
+        /// <summary>把角度写进选区框（不要每次拖动都重新 new，保持 RenderTransformOrigin）。</summary>
+        private void KeepSelectFrameAngle(double degrees)
+        {
+            try
+            {
+                if (_selectFrame == null) return;
+                _selectFrame.RenderTransformOrigin = new Point(0.5, 0.5);
+                _selectFrame.RenderTransform = new RotateTransform(degrees);
+            }
+            catch { }
+        }
+
+        private void RemoveSelRotateGhost()
+        {
+            try
+            {
+                if (_selRotateGhost == null) return;
+                _selRotateGhost.Source = null;
+                _selRotateGhost.Visibility = Visibility.Collapsed;
+            }
+            catch { }
+        }
+
+        private void ResetSelectFrameTransform()
+        {
+            try
+            {
+                if (_selectFrame == null) return;
+                _selectFrame.RenderTransform = Transform.Identity;
+            }
+            catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-9：旋转后内容的外接矩形（redo 时还原选区框用）。</summary>
+        private Rect _selRotateAabbDip;
+
+        /// <summary>3.77.0-snapshot-13：开始这次旋转前选区框已有的倾斜角度。</summary>
+        private double _selRotateBaseAngle;
+
+        // 3.77.0-snapshot-10：按住移动开始时的外接矩形（倾斜选区撤销要用）
+        private Rect _selectMoveAabbStart = Rect.Empty;
+
+        private void CleanupSelRotate()
+        {
+            _selRotating = false;
+            _selRotateSnapshot = null;
+            _selRotateBlock = null;
+            _selRotateBlockRect = new Int32Rect(0, 0, 0, 0);
+            _selRotateAccum = 0;
         }
 
         private static Int32Rect UnionRect(Int32Rect a, Int32Rect b)
@@ -3199,6 +5268,7 @@ namespace RandomDrawer
                 var cropped = CropSelection();
                 if (cropped == null) return;
                 _clipImage = cropped;
+                _clipImageAt = DateTime.Now;
 
                 // 复制的是图片数据（不是文件），放到系统剪贴板
                 try { Clipboard.SetImage(cropped); } catch { }
@@ -3299,7 +5369,21 @@ namespace RandomDrawer
         {
             if (!_hasMedia) return;
 
-            var source = GetClipboardImage() ?? _clipImage;
+            // 3.77.0-snapshot-5：系统剪贴板存图会走 DIB，透明区域会变成黑色 ——
+            // 如果剪贴板里就是刚在本页复制的那一张（尺寸一致、10 分钟内），优先用内部 Pbgra32 副本。
+            var clipImage = GetClipboardImage();
+            BitmapSource? source;
+            if (_clipImage != null && clipImage != null
+                && clipImage.PixelWidth == _clipImage.PixelWidth
+                && clipImage.PixelHeight == _clipImage.PixelHeight
+                && (DateTime.Now - _clipImageAt).TotalMinutes < 10)
+            {
+                source = _clipImage;
+            }
+            else
+            {
+                source = clipImage ?? _clipImage;
+            }
             if (source == null)
             {
                 try { ToastNotification.ShowWarning(Window.GetWindow(this), "剪贴板里没有图片"); } catch { }
@@ -3547,7 +5631,59 @@ namespace RandomDrawer
                     return;
                 }
 
-                if (_mode != ToolMode.Eraser || !_hasMedia) return;
+                // 3.77.0-snapshot-3：选择工具也在 Preview 阶段接管 ——
+                // 画布里的图片 / 视频 / 批注层会先把冒泡的 MouseLeftButtonDown 消费掉，
+                // 导致「点选择工具后框选毫无反应」，所以和橡皮擦一样提前拦下来。
+                if (_mode == ToolMode.Select && _hasMedia && !_pickingColor)
+                {
+                    Point sp = e.GetPosition(Stage);
+
+                    // 3.77.0-snapshot-9：把手的命中改成几何判定。
+                    // 原来用 IsMouseOver，可批注层 / 选框盖在它上面时命中测试永远为 false，
+                    // 于是拖把手被当成「在画布上重新框选」——用户看到的就是旋转没反应。
+                    if (TryHitSelRotateHandle(sp))
+                    {
+                        BeginSelRotate(sp);
+                        e.Handled = true;
+                        return;
+                    }
+
+                    EnsureSelectionRaster();
+
+                    // 上一次框选的 MouseUp 可能没回到画布（在画布外松手 / 被别的层吃掉），
+                    // 那样 _hasSelRect 一直是 false，下一次按下就会把框当成「重新框选」、
+                    // 顺手清掉刚框住的批注。这里先用当前框补一次提交。
+                    if (_selectDragging && _selectFrame != null
+                        && _selectFrame.Width >= 4 && _selectFrame.Height >= 4)
+                    {
+                        _selRect = new Rect(Canvas.GetLeft(_selectFrame), Canvas.GetTop(_selectFrame),
+                                            _selectFrame.Width, _selectFrame.Height);
+                        _hasSelRect = true;
+                    }
+                    _selectDragging = false;
+                    try { Stage.ReleaseMouseCapture(); } catch { }
+
+                    if (HasSelection && _selRect.Contains(sp))
+                    {
+                        BeginSelectMove(sp);
+                    }
+                    else
+                    {
+                        ClearSelection();
+                        _selectDragging = true;
+                        _selectDragStart = sp;
+                        ShowSelectFrame(new Rect(sp, sp));
+                        try { Stage.CaptureMouse(); } catch { }
+                    }
+
+                    try { Stage.Focus(); } catch { }
+                    e.Handled = true;
+                    return;
+                }
+
+                // 3.77.0-snapshot-9：橡皮不依赖是否已载入封面（无封面时 EraseAt 内部会直接返回），
+                // 否则页签切换动画期间 _hasMedia 尚未就绪会让橡皮按下无效。
+                if (_mode != ToolMode.Eraser) return;
 
                 BeginEraseStroke();
                 EraseAt(e.GetPosition(Stage));
@@ -3556,6 +5692,58 @@ namespace RandomDrawer
             catch (Exception ex)
             {
                 RuntimeLog.Error(ex, "封面编辑页：橡皮擦按下失败");
+            }
+        }
+
+        /// <summary>
+        /// 3.77.0-snapshot-4：把框选中的虚线框提交成有效选区。
+        /// MouseUp 常常回不到画布（松手在画布外、被图片 / 视频 / 批注层吃掉、
+        /// 或者 Capture 被别的控件抢走），那样 _selectDragging 一直挂着，
+        /// 鼠标随便一动虚线框就跟着缩，所以按下 / 抬起 / 移动三处都用它兜底。
+        /// </summary>
+        private bool CommitSelectDragFrame()
+        {
+            if (!_selectDragging || _selectFrame == null) return false;
+
+            double w = _selectFrame.Width;
+            double h = _selectFrame.Height;
+
+            _selectDragging = false;
+            try { Stage.ReleaseMouseCapture(); } catch { }
+
+            if (w < 4 || h < 4)
+            {
+                ClearSelection();
+                return false;
+            }
+
+            _selRect = new Rect(Canvas.GetLeft(_selectFrame), Canvas.GetTop(_selectFrame), w, h);
+            _hasSelRect = true;
+            ShowSelectFrame(_selRect);
+            return true;
+        }
+
+        /// <summary>
+        /// 3.77.0-snapshot-4：选择工具的收尾也在 Preview 阶段兜一次。
+        /// 冒泡的 MouseLeftButtonUp 一旦被图层消费掉，_selectMoving 就一直为 true，
+        /// 之后鼠标移到工具栏选区还会跟着跑 —— 这里提前把状态清干净。
+        /// </summary>
+        private void Stage_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+            if (_mode != ToolMode.Select || !_hasMedia) return;
+
+            if (_selectDragging)
+            {
+                CommitSelectDragFrame();
+                e.Handled = true;
+                return;
+            }
+
+            if (_selectMoving)
+            {
+                EndSelectMove();
+                e.Handled = true;
             }
         }
 
@@ -3610,25 +5798,10 @@ namespace RandomDrawer
                 }
 
                 // 3.43：选择工具 —— 框选区域，或拖动选中的像素
+                // （3.77.0-snapshot-3 起改到 Stage_PreviewMouseDown 里处理，
+                //   这里保留兜底：极端情况下 Preview 没能接管时仍然可用）
                 if (_mode == ToolMode.Select)
                 {
-                    var sp = e.GetPosition(Stage);
-                    EnsureSelectionRaster();
-
-                    if (HasSelection && _selRect.Contains(sp))
-                    {
-                        BeginSelectMove(sp);
-                    }
-                    else
-                    {
-                        ClearSelection();
-                        _selectDragging = true;
-                        _selectDragStart = sp;
-                        ShowSelectFrame(new Rect(sp, sp));
-                        try { Stage.CaptureMouse(); } catch { }
-                    }
-
-                    try { Stage.Focus(); } catch { }
                     e.Handled = true;
                     return;
                 }
@@ -3673,6 +5846,12 @@ namespace RandomDrawer
                 if (_mode == ToolMode.Select)
                 {
                     Point sp = e.GetPosition(Stage);
+
+                    // 3.77.0-snapshot-4：松手事件丢了也别让虚线框继续缩
+                    if (_selectDragging && e.LeftButton != MouseButtonState.Pressed)
+                    {
+                        CommitSelectDragFrame();
+                    }
 
                     if (_selectDragging)
                     {
@@ -3746,21 +5925,7 @@ namespace RandomDrawer
             {
                 if (_selectDragging)
                 {
-                    _selectDragging = false;
-                    try { Stage.ReleaseMouseCapture(); } catch { }
-
-                    double w = _selectFrame?.Width ?? 0;
-                    double h = _selectFrame?.Height ?? 0;
-                    if (w < 4 && h < 4)
-                    {
-                        ClearSelection();
-                        e.Handled = true;
-                        return;
-                    }
-
-                    _selRect = new Rect(Canvas.GetLeft(_selectFrame), Canvas.GetTop(_selectFrame), w, h);
-                    _hasSelRect = true;
-                    ShowSelectFrame(_selRect);
+                    CommitSelectDragFrame();
                     e.Handled = true;
                     return;
                 }
@@ -4843,7 +7008,7 @@ namespace RandomDrawer
 
         private void StageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+            // 3.77.0-snapshot-5：不再要求按住 Ctrl，滚轮直接缩放；原来的 Ctrl + 滚轮依旧可用。
             e.Handled = true;
             SetZoom(_zoom + (e.Delta > 0 ? ZoomStep : -ZoomStep));
         }
@@ -4903,21 +7068,41 @@ namespace RandomDrawer
             MarkDirty();
         }
 
+        /// <summary>3.77.0-snapshot-10：内容 / 样式类改动的撤销入栈。</summary>
+        private void PushUndoAction(EditAction action)
+        {
+            try { _undo.Push(action); _redo.Clear(); } catch { }
+        }
+
+        /// <summary>3.77.0-snapshot-10：缩略图页签设置的撤销入栈（独立于内容 / 样式）。</summary>
+        private void PushThumbAction(EditAction action)
+        {
+            try { _thumbUndo.Push(action); _thumbRedo.Clear(); } catch { }
+        }
+
+
         private void BtnUndo_Click(object sender, RoutedEventArgs e)
         {
-            if (_undo.Count == 0) return;
-            var action = _undo.Pop();
+            // 3.77.0-snapshot-10：缩略图页签的改动独立记录，与「文字 / 绘图 / 样式」互不干扰。
+            bool inThumb = string.Equals(_ribbonTab, "thumb", StringComparison.OrdinalIgnoreCase);
+            Stack<EditAction> undo = inThumb ? _thumbUndo : _undo;
+            Stack<EditAction> redo = inThumb ? _thumbRedo : _redo;
+            if (undo.Count == 0) return;
+            var action = undo.Pop();
             try { action.Undo(); } catch { }
-            _redo.Push(action);
+            redo.Push(action);
             MarkDirty();
         }
 
         private void BtnRedo_Click(object sender, RoutedEventArgs e)
         {
-            if (_redo.Count == 0) return;
-            var action = _redo.Pop();
+            bool inThumb = string.Equals(_ribbonTab, "thumb", StringComparison.OrdinalIgnoreCase);
+            Stack<EditAction> undo = inThumb ? _thumbUndo : _undo;
+            Stack<EditAction> redo = inThumb ? _thumbRedo : _redo;
+            if (redo.Count == 0) return;
+            var action = redo.Pop();
             try { action.Redo(); } catch { }
-            _undo.Push(action);
+            undo.Push(action);
             MarkDirty();
         }
 
@@ -4925,98 +7110,218 @@ namespace RandomDrawer
         // 封面样式（圆角 / 方角）
         // ================================================================
 
-        private void BtnStyleRound_Click(object sender, RoutedEventArgs e) => SetRoundCover(true);
+        private void BtnStyleRound_Click(object sender, RoutedEventArgs e) => SetCoverRadius(_coverRadius > 0.5 ? _coverRadius : 12);
 
-        private void BtnStyleSquare_Click(object sender, RoutedEventArgs e) => SetRoundCover(false);
+        private void BtnStyleSquare_Click(object sender, RoutedEventArgs e) => SetCoverRadius(0);
 
-        private void SetRoundCover(bool round)
+        /// <summary>3.77.0-snapshot-6：封面圆角大小右侧的小箭头 —— 打开「圆角大小」气泡。</summary>
+        private void BtnStyleRadiusMenu_Click(object sender, RoutedEventArgs e) => OpenRadiusPanel(BtnStyleRadiusMenu, RadiusTarget.Cover);
+
+        /// <summary>3.77.0-snapshot-6：设定封面圆角半径（0 = 方角），立即写盘并刷新预览。</summary>
+        private void SetCoverRadius(double radius, bool recordUndo = true)
         {
-            if (_roundCover == round)
+            try
             {
+                radius = Math.Max(0, Math.Min(64, radius));
+                double previous = _coverRadius;
+                bool same = Math.Abs(previous - radius) < 0.05;
+                _coverRadius = radius;
+                _roundCover = radius > 0.5;
                 UpdateStyleButtons();
-                return;
+                ApplyRoundPreview();
+                if (!string.IsNullOrEmpty(_poolDir) && Directory.Exists(_poolDir))
+                    PoolCover.SetCoverRadius(_poolDir, radius);
+                if (!same)
+                {
+                    MarkDirty();
+                    // 3.77.0-snapshot-10：封面圆角（样式页签）也能撤销 / 恢复。
+                    if (recordUndo)
+                        PushUndoAction(new EditAction
+                        {
+                            Undo = () => SetCoverRadius(previous, false),
+                            Redo = () => SetCoverRadius(radius, false),
+                        });
+                }
             }
-
-            _roundCover = round;
-            UpdateStyleButtons();
-            ApplyRoundPreview();
-            MarkDirty();
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：设置封面圆角失败"); }
         }
 
         private void UpdateStyleButtons()
         {
             SetToggle(BtnStyleRound, _roundCover);
+            // 3.77.0-snapshot-9：圆角和右侧箭头是一整块，选中时蓝框要一起包住箭头
+            SetToggle(BtnStyleRadiusMenu, _roundCover);
             SetToggle(BtnStyleSquare, !_roundCover);
+        }
+
+        // -----------------------------------------------------------------
+        // 3.77.0-snapshot-9：样式页签「圆角 + 箭头」的整块悬浮联动（同文字页签的荧光笔）
+        // -----------------------------------------------------------------
+
+        private bool _styleRoundHover;
+        private bool _styleRoundArrowHover;
+
+        private void BtnStyleRound_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _styleRoundHover = true;
+            UpdateStyleRoundHover();
+        }
+
+        private void BtnStyleRound_MouseLeave(object sender, MouseEventArgs e)
+        {
+            _styleRoundHover = false;
+            UpdateStyleRoundHover();
+        }
+
+        private void BtnStyleRadiusMenu_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _styleRoundArrowHover = true;
+            UpdateStyleRoundHover();
+        }
+
+        private void BtnStyleRadiusMenu_MouseLeave(object sender, MouseEventArgs e)
+        {
+            _styleRoundArrowHover = false;
+            UpdateStyleRoundHover();
+        }
+
+        private void UpdateStyleRoundHover()
+        {
+            try
+            {
+                if (BtnStyleRadiusMenu == null) return;
+
+                bool arrowHot = false;
+                try { arrowHot = BtnStyleRadiusMenu.IsMouseOver; } catch { }
+
+                bool hot = _styleRoundHover || _styleRoundArrowHover || arrowHot;
+
+                // 悬浮「圆角」→ 整块一起加深；鼠标移到箭头上 → 箭头那一块再深一档
+                try { BtnStyleRadiusMenu.Tag = arrowHot ? "hotdeep" : (hot ? "hot" : null); } catch { }
+                try { if (BtnStyleRound != null) BtnStyleRound.Tag = hot ? "hot" : null; } catch { }
+            }
+            catch { }
         }
 
         private void ApplyRoundPreview()
         {
-            try { RoundCorner.SetEnabled(Stage, _roundCover); } catch { }
-        }
-
-        // ================================================================
-        // 悬浮提示（复用 HintBubble：可显示到窗口外，但不出屏幕）
-        // ================================================================
-
-        private void AttachToolHints()
-        {
-            AttachHint(BtnImport, "替换 / 导入封面");
-            AttachHint(BtnSave, "保存封面");
-            // 3.37：页签不再有悬浮提示（只靠文字颜色 + 下方横线表示选中）
-            AttachHint(BtnTextTool, "文本框");
-            AttachHint(BtnSelectTool, "选择：框选后可复制、剪切、删除或拖动移动");
-            AttachHint(BtnPen, "画笔");
-            _highlightHint = AttachHint(BtnHighlight, "荧光笔：给选中的文字加荧光");
-            AttachHint(BtnHighlightMenu, "荧光样式");
-            AttachHint(BtnEyedropper, "取色器：点画面、文字或笔迹取色");
-            AttachHint(ComboFontFamily, "字体");
-            _textColorHint = AttachHint(BtnTextColor, "文字颜色");
-            AttachHint(BtnBold, "粗体");
-            AttachHint(BtnItalic, "斜体");
-            AttachHint(BtnUnderline, "下划线");
-            AttachHint(BtnStrike, "删除线");
-            _paintColorHint = AttachHint(BtnPaintColor, "颜色");
-            AttachHint(BtnEraser, "橡皮擦");
-            AttachHint(ComboPenSize, "粗细");
-            AttachHint(BtnStyleRound, "圆角封面");
-            AttachHint(BtnStyleSquare, "方角封面");
-            AttachHint(BtnUndo, "撤销");
-            AttachHint(BtnRedo, "恢复");
-            AttachHint(BtnZoomOut, "缩小");
-            AttachHint(BtnZoomIn, "放大");
-            AttachHint(SlZoom, "缩放（也可 Ctrl + 滚轮）");
-            AttachHint(TxtZoom, "当前缩放");
-            AttachHint(BtnMediaPlayPause, "播放 / 暂停");
-            AttachHint(SlMediaProgress, "播放进度");
-        }
-
-        private HintBubble? AttachHint(FrameworkElement target, string text)
-        {
-            if (target == null) return null;
-
-            var hint = new HintBubble(target, text);
-            _toolHints.Add(hint);
-
-            if (target is ComboBox combo)
+            try
             {
-                // 下拉展开后鼠标在弹出层里，MouseLeave 不会触发；而且展开期间仍可能收到
-                // MouseMove，所以展开时主动收起，并在 IsDropDownOpen 期间不再显示。
-                combo.DropDownOpened += (s, e) => hint.Hide();
-                combo.MouseEnter += (s, e) => { if (!combo.IsDropDownOpen) hint.Show(Mouse.GetPosition(target)); };
-                combo.MouseMove += (s, e) => { if (!combo.IsDropDownOpen) hint.Show(Mouse.GetPosition(target)); };
-                combo.MouseLeave += (s, e) => hint.Hide();
-                combo.Unloaded += (s, e) => hint.Hide();
-                return hint;
+                RoundCorner.SetEnabled(Stage, _coverRadius > 0.5, _coverRadius);
+                if (Stage.ActualWidth <= 0 || Stage.ActualHeight <= 0)
+                {
+                    // 还没排版就先记下，等布局完成再套一次圆角（否则第一次打开页面时圆角会丢）
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        try { RoundCorner.SetEnabled(Stage, _coverRadius > 0.5, _coverRadius); } catch { }
+                    }), DispatcherPriority.Loaded);
+                }
             }
-
-            target.MouseEnter += (s, e) => hint.Show(Mouse.GetPosition(target));
-            target.MouseMove += (s, e) => hint.Show(Mouse.GetPosition(target));
-            target.MouseLeave += (s, e) => hint.Hide();
-            target.Unloaded += (s, e) => hint.Hide();
-            return hint;
+            catch { }
         }
 
-        /// <summary>缩放 / 样式等按钮的提示统一由 <see cref="AttachToolHints"/> 挂载，这里不再单独处理。</summary>
+        // -----------------------------------------------------------------
+        // 3.77.0-snapshot-6：「圆角大小」气泡（样式页签管封面、缩略图页签管卡片）
+        // -----------------------------------------------------------------
+
+        private void OpenRadiusPanel(Button? anchor, RadiusTarget target)
+        {
+            try
+            {
+                if (anchor == null || RadiusPopup == null) return;
+
+                _radiusTarget = target;
+                _radiusPopupAnchor = anchor;
+                _radiusBeforeOpen = target == RadiusTarget.Cover ? _coverRadius : _thumbRadius;
+
+                if (TxtRadiusTitle != null)
+                    TxtRadiusTitle.Text = target == RadiusTarget.Cover ? "封面圆角" : "卡片圆角";
+
+                double value = _radiusBeforeOpen > 0.5 ? _radiusBeforeOpen : 9;
+                if (SlRadius != null)
+                {
+                    _radiusSync = true;
+                    try
+                    {
+                        SlRadius.Value = Math.Max(SlRadius.Minimum, Math.Min(SlRadius.Maximum, value));
+                    }
+                    finally { _radiusSync = false; }
+                }
+                if (TxtRadiusValue != null) TxtRadiusValue.Text = ((int)Math.Round(value)).ToString();
+
+                RadiusPopup.PlacementTarget = anchor;
+                RadiusPopup.HorizontalOffset = anchor.ActualWidth / 2 - 31 - 20;
+                // 在 Click 事件里同步打开时，紧接着的 MouseUp 会被 Popup 当成「点了外面」而立刻关掉，
+                // 所以推到下一个输入消息里再打开。
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (RadiusPopup != null) RadiusPopup.IsOpen = true;
+                    }
+                    catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：显示圆角大小面板失败"); }
+                }), DispatcherPriority.Input);
+                RuntimeLog.Info("封面编辑页：打开圆角大小面板 " + (target == RadiusTarget.Cover ? "封面" : "卡片") + " radius=" + value);
+            }
+            catch (Exception ex) { RuntimeLog.Error(ex, "封面编辑页：打开圆角大小面板失败"); }
+        }
+
+        /// <summary>3.77.0-snapshot-10：气泡关掉时把这次拖动合成一步撤销。</summary>
+        private void RadiusPopup_Closed(object sender, EventArgs e)
+        {
+            try
+            {
+                double now = _radiusTarget == RadiusTarget.Cover ? _coverRadius : _thumbRadius;
+                double before = _radiusBeforeOpen;
+                if (Math.Abs(now - before) < 0.05) return;
+                if (_radiusTarget == RadiusTarget.Cover)
+                    PushUndoAction(new EditAction
+                    {
+                        Undo = () => SetCoverRadius(before, false),
+                        Redo = () => SetCoverRadius(now, false),
+                    });
+                else
+                    PushThumbAction(new EditAction
+                    {
+                        Undo = () => SetThumbCardRadius(before, false),
+                        Redo = () => SetThumbCardRadius(now, false),
+                    });
+            }
+            catch { }
+        }
+
+
+        private void RadiusPopup_Opened(object? sender, EventArgs e)
+        {
+            try { AlignRadiusPopupArrow(); } catch { }
+        }
+
+        private void AlignRadiusPopupArrow()
+        {
+            try
+            {
+                if (RadiusCard == null || RadiusPopupArrow == null || _radiusPopupAnchor == null) return;
+                Point p = _radiusPopupAnchor.TranslatePoint(new Point(_radiusPopupAnchor.ActualWidth / 2, 0), RadiusCard);
+                double x = Math.Max(12, Math.Min(RadiusCard.ActualWidth - 26, p.X - 7));
+                RadiusPopupArrow.Margin = new Thickness(x, -8, 0, 0);
+            }
+            catch { }
+        }
+
+        private void SlRadius_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_radiusSync) return;
+            try
+            {
+                int value = (int)Math.Round(e.NewValue);
+                if (TxtRadiusValue != null) TxtRadiusValue.Text = value.ToString();
+                if (_radiusTarget == RadiusTarget.Cover) SetCoverRadius(value, recordUndo: false);
+                else SetThumbCardRadius(value, recordUndo: false);
+                AlignRadiusPopupArrow();
+            }
+            catch { }
+        }
+
         private void VideoPreview_MediaOpened(object sender, RoutedEventArgs e)
         {
             try

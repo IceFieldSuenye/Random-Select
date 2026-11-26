@@ -125,6 +125,8 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 		MessageBus.Subscribe(_onUiOptionsChanged);
 		Loaded += OptionsPage_UC_Loaded;
 		Unloaded += OptionsPage_UC_Unloaded;
+		// 3.77.0-snapshot-21：主题切换后帮助正文要立刻换成新主题的字色
+		ThemeManager.ThemeChanged += OnThemeChangedForHelp;
 		InitWindowTitleUI();
 
 		// 目录行限宽：窗口变宽时不再把输入框拉成一整行
@@ -239,6 +241,13 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 
 	private void OptionsPage_UC_Unloaded(object sender, RoutedEventArgs e)
 	{
+		try
+		{
+			ThemeManager.ThemeChanged -= OnThemeChangedForHelp;
+		}
+		catch
+		{
+		}
 		try
 		{
 			StopGifPlayback();
@@ -943,6 +952,32 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 		return Brushes.White;
 	}
 
+	/// <summary>
+	/// 3.77.0-snapshot-21：从深色切回浅色时，帮助正文里被搜索高亮重建过的 Run 会带着旧的局部前景色，
+	/// 看上去仍停在深色样式。切主题后把这些 Run 的局部 Foreground 清掉，让 TextBlock 的
+	/// DynamicResource 重新生效；搜索框里还有词时再按新主题重跑一次高亮。
+	/// </summary>
+	private void OnThemeChangedForHelp(object sender, EventArgs e)
+	{
+		try
+		{
+			if (!IsLoaded) return;
+			if (_helpHighlighted.Count > 0) ClearHelpHighlight();
+			foreach (var block in EnumerateHelpTextBlocks())
+			{
+				foreach (var inline in block.Inlines)
+				{
+					if (inline is Run run) run.ClearValue(TextElement.ForegroundProperty);
+				}
+			}
+			if (HelpSearch != null && !string.IsNullOrWhiteSpace(HelpSearch.SearchText))
+			{
+				HighlightAllHelpMatches();
+			}
+		}
+		catch { }
+	}
+
 	private readonly Dictionary<TextBlock, List<(int Start, int Length, int Index)>> _helpRanges =
 		new Dictionary<TextBlock, List<(int, int, int)>>();
 
@@ -1598,7 +1633,9 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 		}
 		else if (!string.IsNullOrEmpty(block.Text))
 		{
-			list.Add(new HelpRunInfo { Text = block.Text, Fore = block.Foreground });
+			// 3.77.0-snapshot-21：不要固定捕获 TextBlock 当前的前景 brush，否则重建出的 Run
+			// 会把当时的主题色写死；留空让 Run 继续继承 TextBlock 的 DynamicResource。
+			list.Add(new HelpRunInfo { Text = block.Text, Fore = null });
 		}
 		return list;
 	}
@@ -1752,6 +1789,10 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 			{
 				ChkHideGachaReport.IsChecked = App.HideGachaReport;
 			}
+			if (ChkHideExperimental != null)
+			{
+				ChkHideExperimental.IsChecked = App.HideExperimental;
+			}
 			ChkHideAdvanced.IsEnabled = !App.HideProbabilityOption;
 			// 3.67：隐藏「功能隐藏」本身时，整张卡片一起收起，不能只收内容（会残留一条卡片白边）
 			if (CardHideSection != null)
@@ -1761,6 +1802,11 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 			if (PanelHideSection != null)
 			{
 				PanelHideSection.Visibility = Visibility.Visible;
+			}
+			// 3.77.0-snapshot-21：隐藏「实验性功能」时整张卡片一起收起
+			if (CardExperimental != null)
+			{
+				CardExperimental.Visibility = App.IsExperimentalVisible ? Visibility.Visible : Visibility.Collapsed;
 			}
 			UpdateEditPoolButtonVisibility();
 			UpdateHelpVisibility();
@@ -1799,6 +1845,11 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 			if (HelpReportAdvanced != null)
 			{
 				HelpReportAdvanced.Visibility = App.IsAdvancedVisible ? Visibility.Visible : Visibility.Collapsed;
+			}
+			// 3.77.0-snapshot-21：实验性功能说明跟随隐藏开关
+			if (HelpExperimental != null)
+			{
+				HelpExperimental.Visibility = App.IsExperimentalVisible ? Visibility.Visible : Visibility.Collapsed;
 			}
 
 			// 功能隐藏时，「快速导航」里对应的按钮也一起收起
@@ -2633,6 +2684,20 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 		MessageBus.Publish(new AppMessages.UiOptionsChanged());
 	}
 
+	/// <summary>3.77.0-snapshot-21：隐藏「实验性功能」卡片，帮助页里的实验性功能说明一起收起。</summary>
+	private void ChkHideExperimental_Click(object sender, RoutedEventArgs e)
+	{
+		if (_isLoading) return;
+		try
+		{
+			App.HideExperimental = ChkHideExperimental.IsChecked == true;
+			App.SaveSettings();
+			RefreshHideOptionsUI();
+			MessageBus.Publish(new AppMessages.UiOptionsChanged());
+		}
+		catch { }
+	}
+
 	private void ChkMuteWhenUnfocused_Click(object sender, RoutedEventArgs e)
 	{
 		if (!_isLoading)
@@ -2711,6 +2776,38 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 		catch { }
 	}
 
+	/// <summary>3.77.0-snapshot-19：实验性功能「无上限抽取次数」——开启前先警告（数字用英文逗号千分位）。</summary>
+	private void ChkExperimentalUnlimitedDraw_Click(object sender, RoutedEventArgs e)
+	{
+		if (_isLoading) return;
+		try
+		{
+			bool want = ChkExperimentalUnlimitedDraw.IsChecked == true;
+			if (want && !App.UnlimitedDrawCount)
+			{
+				var result = CustomMessageBox.Show(Window.GetWindow(this),
+					"「无上限抽取次数」是实验性功能，开启前请确认已了解以下影响：\n\n" +
+					"· 普通卡池的抽取次数上限从 9,999 提升到 2,147,483,647 次；\n" +
+					"· 带高级抽卡规则的卡池（蔚蓝档案 / 星铁等）不受影响，仍保持 1~9,999 次；\n" +
+					"· 第一次抽取之后就不能再对本次结果做撤销/修改，请确认次数无误；\n" +
+					"· 抽取会持续计算并写入历史记录，每 10,000 条自动分成一个文件（存放在卡池目录的 History 文件夹），数据量极大时可能占用几十 GB 甚至更多磁盘空间；\n" +
+					"· 结果页最多逐条展示前 1,000,000 条，其余只统计总次数；\n" +
+					"· 无上限抽取只在关闭「不重复抽取」时生效；\n" +
+					"· 遇到卡顿或问题，请随时关闭此开关。\n\n确定开启吗？",
+					"实验性功能", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+				if (result != MessageBoxResult.OK)
+				{
+					ChkExperimentalUnlimitedDraw.IsChecked = false;
+					return;
+				}
+			}
+
+			App.UnlimitedDrawCount = want;
+			App.SaveSettings();
+		}
+		catch { }
+	}
+
 	/// <summary>3.76.10：两个封面音频开关只在实验性功能开启时显示。</summary>
 	private void UpdateCoverAudioRowsVisibility()
 	{
@@ -2758,6 +2855,10 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 		if (ChkExperimentalCoverAudio != null)
 		{
 			ChkExperimentalCoverAudio.IsChecked = App.ExperimentalCoverAudio;
+		}
+		if (ChkExperimentalUnlimitedDraw != null)
+		{
+			ChkExperimentalUnlimitedDraw.IsChecked = App.UnlimitedDrawCount;
 		}
 		UpdateCoverAudioRowsVisibility();
 		SliderSoundVolume.Value = App.SoundEffectVolume * 100.0;
@@ -2998,6 +3099,9 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 
 	private void ChkMusic_Click(object sender, RoutedEventArgs e)
 	{
+		// 3.77.0-snapshot-4：用户手动动过背景音乐开关，--mute 就不再接管配置
+		App.MusicSettingsTouched = true;
+
 		if (ChkMusic.IsChecked == true)
 		{
 			if (!ResourcesDirExists())
@@ -4224,8 +4328,12 @@ public partial class OptionsPage_UC : UserControl, IPageAnimation, IComponentCon
 			ImgCover.Source = null;
 			ImgCover.Visibility = Visibility.Collapsed;
 		}
-		TxtCoverPlaceholder.Text = poolName ?? "点击可选择文件";
-		TxtCoverPlaceholder.Visibility = Visibility.Visible;
+		// 3.77.0-snapshot-13：卡池名只在「默认封面且没有编辑过」时叠加显示；
+		// 编辑过默认封面后，名字已经画进批注层（cover_overlay.png），再叠加会重影。
+		string dir = GetSelectedPoolDir();
+		bool defaultEdited = !string.IsNullOrEmpty(dir) && PoolCover.HasDefaultCoverEdit(dir);
+		TxtCoverPlaceholder.Text = poolName ?? "";
+		TxtCoverPlaceholder.Visibility = defaultEdited ? Visibility.Collapsed : Visibility.Visible;
 	}
 
 	private void Cover_Click(object sender, MouseButtonEventArgs e)

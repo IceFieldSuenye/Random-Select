@@ -544,7 +544,13 @@
                                                    IsHitTestVisible="False"/>
                                             <TextBlock Name="TxtCoverPlaceholder" Text="点击可选择文件"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       MaxWidth="180" Margin="10"/>
+                                                       MaxWidth="280" Margin="10"
+                                                       FontSize="20" FontWeight="Bold" Foreground="White"
+                                                       TextAlignment="Center" TextWrapping="Wrap">
+                                                <TextBlock.Effect>
+                                                    <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.85" Color="Black"/>
+                                                </TextBlock.Effect>
+                                            </TextBlock>
                                         </Grid>
                                     </Border>
 
@@ -1038,6 +1044,18 @@
                                                     Click="ChkHideGachaReport_Click"/>
                             </Grid>
 
+                            <!-- 3.77.0-snapshot-21：隐藏实验性功能卡片（帮助页里的实验性说明也会一起收起） -->
+                            <Grid Style="{StaticResource OptionsRowStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="隐藏「实验性功能」" Style="{StaticResource OptionsRowLabelStyle}"/>
+                                <local:OptionToggle Grid.Column="1" x:Name="ChkHideExperimental"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Click="ChkHideExperimental_Click"/>
+                            </Grid>
+
                             <Grid Style="{StaticResource OptionsRowStyle}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -1052,7 +1070,7 @@
                     </local:ShadowCard>
 
                     <!-- 3.76.10：实验性功能（默认关闭，开启后才显示「视频封面音频」相关开关） -->
-                    <local:ShadowCard Style="{StaticResource OptionsCardStyle}" Margin="0,0,0,16">
+                    <local:ShadowCard x:Name="CardExperimental" Style="{StaticResource OptionsCardStyle}" Margin="0,0,0,16">
                         <StackPanel>
                             <TextBlock Text="实验性功能" Style="{StaticResource OptionsCardTitleStyle}"/>
                             <Border Style="{StaticResource OptionsCardTitleRuleStyle}"/>
@@ -1067,6 +1085,19 @@
                                 <local:OptionToggle Grid.Column="1" x:Name="ChkExperimentalCoverAudio"
                                                     HorizontalAlignment="Right" VerticalAlignment="Center"
                                                     Click="ChkExperimentalCoverAudio_Click"/>
+                            </Grid>
+
+                            <!-- 3.77.0-snapshot-17：无上限抽取次数（默认关闭） -->
+                            <Grid Style="{StaticResource OptionsRowStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="无上限抽取次数" Style="{StaticResource OptionsRowLabelStyle}"
+                                           ToolTip="实验性功能：允许输入最多 2147483647 次抽取。默认关闭。"/>
+                                <local:OptionToggle Grid.Column="1" x:Name="ChkExperimentalUnlimitedDraw"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Click="ChkExperimentalUnlimitedDraw_Click"/>
                             </Grid>
                         </StackPanel>
                     </local:ShadowCard>
@@ -1180,7 +1211,8 @@
                                 7. <Run FontWeight="Bold">忘记密码</Run>：在验证窗口点「忘记密码」，答对密保问题即可重置。<LineBreak/>
                                 8. <Run FontWeight="Bold">导入 / 导出</Run>：导出把选中的卡池打包成 zip，加密卡池会先验证密码，导出时解密成明文名单；导入支持拖入 zip 或手动选择，有进度提示。<LineBreak/>
                                 9. <Run FontWeight="Bold">右键菜单</Run>：在左侧列表或封面区域右键，可浏览文件夹、导出、编辑、重命名、调整封面、查看历史、删除。<LineBreak/>
-                                10. <Run FontWeight="Bold">外部改动</Run>：在资源管理器里增删卡池文件夹，列表会自动同步。
+                                10. <Run FontWeight="Bold">卡片外观</Run>：卡池列表的每张卡片可以显示封面缩略图，能带名字、选圆角或方角；鼠标移上去边框变成主题色，选中的卡片边框在深蓝和主题色之间来回缓慢变化。设置入口：右键卡池 →「调整封面」→「缩略图」页签。卡池多到一屏放不下时右侧才会出现滚动条，滚动条颜色跟着当前主题走。<LineBreak/>
+                                11. <Run FontWeight="Bold">外部改动</Run>：在资源管理器里增删卡池文件夹，列表会自动同步。
                             </TextBlock>
                         </StackPanel>
                     </local:ShadowCard>
@@ -1192,15 +1224,17 @@
                             <Border Style="{StaticResource OptionsCardTitleRuleStyle}"/>
                             <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,10,0,4" Foreground="{DynamicResource Fg_HelpText}">
                                 1. <Run FontWeight="Bold">没有封面</Run>：卡池没有封面时先显示「未添加封面」，可以「添加封面」或「编辑默认封面」；编辑默认封面时，卡池名会一起画进批注位图，可像涂画一样擦除、框选或移动。<LineBreak/>
-                                2. <Run FontWeight="Bold">顶部</Run>：左侧「替换封面 / 保存 / 撤销 / 恢复」，右侧「文字 / 绘图 / 样式」三个页签。<LineBreak/>
+                                2. <Run FontWeight="Bold">顶部</Run>：左侧「替换封面 / 保存 / 另存为 / 撤销 / 恢复」，右侧「文字 / 绘图 / 样式 / 缩略图」四个页签。<LineBreak/>
                                 3. <Run FontWeight="Bold">文字</Run>：在封面上拖出方框加文字，可调字体、字号、颜色、粗体 / 斜体 / 下划线 / 删除线；荧光笔只给选中的文字加底色或下划线。<LineBreak/>
                                 4. <Run FontWeight="Bold">文本框</Run>：四角 / 四边拖动改大小，上边中间拖动移位，上方圆形按钮按住旋转；固定后不能再改字，但样式按钮仍作用于它。<LineBreak/>
                                 5. <Run FontWeight="Bold">绘图</Run>：画笔、荧光笔自由涂抹；橡皮擦按方块擦除（文字、笔迹、上次的批注都能擦）；取色器可点画面或已有内容取色。<LineBreak/>
-                                6. <Run FontWeight="Bold">选择</Run>：拖出虚线框框选画面，可整体拖动、复制 / 剪切 / 粘贴 / 删除，右键菜单同样可以；方向键微调，Esc 取消。<LineBreak/>
+                                6. <Run FontWeight="Bold">选择</Run>：拖出虚线框框选画面，可整体拖动、复制 / 剪切 / 粘贴 / 删除；拖选区上方那个圆形小把手能旋转选中的内容（松手后保持角度），右键菜单同样可以；方向键微调，Esc 取消。<LineBreak/>
                                 7. <Run FontWeight="Bold">粘贴</Run>：剪贴板里是图片，或是图片文件（例如 jpg），都能粘进画面。<LineBreak/>
-                                8. <Run FontWeight="Bold">样式</Run>：切换圆角 / 方角封面。<LineBreak/>
-                                9. <Run FontWeight="Bold">保存</Run>：封面原图不动，文字和涂画单独保存；撤销 / 恢复对文字、画笔、橡皮擦、框选操作都有效。<LineBreak/>
-                                10. <Run FontWeight="Bold">缩放</Run>：页面底部滑块 10%~400%，也可以按住 Ctrl 滚动鼠标滚轮。
+                                8. <Run FontWeight="Bold">样式</Run>：切换圆角 / 方角封面；右侧箭头可以调封面圆角大小（1~24）。<LineBreak/>
+                                9. <Run FontWeight="Bold">缩略图</Run>：决定卡池列表里这张卡片长什么样。「默认」只用文字；「使用原封面缩略图」用当前封面（GIF / 视频只取第一帧），它会连你正在画的批注一起算进去，切到别的页签继续画、再回到这里会自动同步；「自定义缩略图」导入一张自己的图片（只支持 PNG / JPG / BMP / WEBP / TIFF 这类静态图，GIF 和视频不能当缩略图），导入后按钮会变成「更换缩略图图片」，没导入就保存会被拦下提醒。卡片上的图会铺满卡片宽度、高度按原图比例走。上面的「字体颜色」调卡片上的名字颜色，「显示卡池名」关掉就只留图——选「默认」时只有一行「字体颜色」，选其它样式时是两行：上排「色块 + 字体颜色」、下排「开关 + 显示卡池名」。右边「切换为圆角 / 切换为方角」切换卡片形状，旁边的「圆角选项」可以调卡片圆角大小（1~24）。下面灰色区域是卡片预览，窗口最底部的状态栏里可以拖动滑块或直接滚动鼠标滚轮缩放；那条状态栏左边是缩放、右边是封面视频的播放进度，不会挡住画面。这里的改动有自己的撤销 / 恢复记录，不会和「文字 / 绘图 / 样式」互相覆盖。<LineBreak/>
+                                10. <Run FontWeight="Bold">另存为</Run>：把封面导出成 PNG / JPEG / BMP / GIF / TIFF；有批注或自定义缩略图时会打包成 zip，里面有封面、批注图和缩略图。视频 / GIF 封面直接导出原文件。<LineBreak/>
+                                11. <Run FontWeight="Bold">保存</Run>：封面原图不动，文字和涂画单独保存；撤销 / 恢复对文字、画笔、橡皮擦、框选操作都有效。<LineBreak/>
+                                12. <Run FontWeight="Bold">缩放</Run>：页面底部滑块 10%~400%，也可以直接滚动鼠标滚轮。底部的状态栏一直显示缩放，封面是视频时右侧还会显示播放进度，点进度条左侧的按钮就能暂停或继续。
                             </TextBlock>
                         </StackPanel>
                     </local:ShadowCard>
@@ -1215,10 +1249,14 @@
                                 2. <Run FontWeight="Bold">多次抽取</Run>：输入 1~9999 次，结果以卡片或列表展示，可以重抽；少于 500 次时不出现加载动画，直接出结果。<LineBreak/>
                                 3. <Run FontWeight="Bold">不重复抽取</Run>：打开开关后已抽过的对象不再出现；抽空时会提示是否重置记录。<LineBreak/>
                                 4. <Run FontWeight="Bold">重置</Run>：清空「不重复抽取」的记录，并把当前卡池的保底恢复初始。<LineBreak/>
-                                5. <Run FontWeight="Bold">历史记录</Run>：按卡池查看每次结果，← / → 翻页；搜索框只筛选当前页。<LineBreak/>
+                                5. <Run FontWeight="Bold">历史记录</Run>：按卡池查看每次结果，← / → 翻页；搜索框只筛选当前页。记录保存在卡池目录的 History 文件夹，每 10 000 条一个文件（history1.txt、history2.txt……），查看时自动拼接全部分片；旧版本留在根目录的 history.txt 也会读取。超过 1 万条后每页按 1 万条分页，翻页只加载当前页涉及的文件。<LineBreak/>
                                 6. <Run FontWeight="Bold">本次抽取详情</Run>：打开「不重复抽取」后，底部可展开查看已抽 / 未抽的对象。<LineBreak/>
                                 7. <Run FontWeight="Bold">记忆</Run>：「不重复抽取」「抽取动画」的开关状态按卡池分别保存，重启后恢复。<LineBreak/>
                                 8. 卡池为空或没有选中卡池时，点抽取会提示先选择一个有内容的卡池。
+                            </TextBlock>
+                            <!-- 3.77.0-snapshot-21：实验性功能说明独立成段，功能隐藏里勾选「实验性功能」时整段收起 -->
+                            <TextBlock x:Name="HelpExperimental" TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,10,0,0" Foreground="{DynamicResource Fg_HelpText}">
+                                <Run FontWeight="Bold">实验性功能</Run>：在「选项 → 系统 → 实验性功能」开启「无上限抽取次数」后，上限提升到 2147483647 次，结果按每 10 000 条一页翻页查看，最多逐条展示前 1 000 000 条；带高级抽卡规则的卡池（蔚蓝档案 / 星铁等）仍保持 1~9999 次。
                             </TextBlock>
                         </StackPanel>
                     </local:ShadowCard>
@@ -1276,12 +1314,12 @@
                                 2. <Run FontWeight="Bold">主页布局</Run>：「简洁」把状态信息收进左侧「抽取详情」按钮：鼠标悬浮就能预览，点一下固定，点空白处或按 Esc 收起；面板里有「重置」「本次抽取详情」「查看抽取报告」；点「重置」会清空记录并在窗口顶部提示，面板不会收起。右侧是「抽取动画」和「不重复抽取」两个开关。「详细」保持原来那样直接显示多行状态文字。两种布局都能切换。<LineBreak/>
                                 3. <Run FontWeight="Bold">主页背景模糊</Run>：默认关闭；切到开启后当前卡池封面会模糊铺在主界面背景上，滑块调强度（最低 0 表示不模糊），视频 / GIF 逐帧跟随；底部状态文字、「抽取动画」和「查看抽取报告」会带一层和其它按钮一样的半透明底衬（不画边框），文字颜色仍跟随主题。<LineBreak/>
                                 4. <Run FontWeight="Bold">窗口标题</Run>：支持 {version} {time} {date} {pool} {page} 参数；留空用「随机抽取器」；回车、换行等不可见字符会提示不可用。<LineBreak/>
-                                5. <Run FontWeight="Bold">背景音乐</Run>：可设「失去焦点时静音」；「视频封面音频」默认开启，播放卡池封面视频自带的声音；「封面视频存在音频时静音背景音乐」开启时视频原声会压掉背景音乐，关闭后两者可以同时播放（背景音乐未开启时这一项不可调整）；点「导入音乐」先选音频、再选保存位置，点「刷新」重新扫描；资源目录还没创建也能直接导入，程序会按你选的位置创建。<LineBreak/>
+                                5. <Run FontWeight="Bold">背景音乐</Run>：可设「失去焦点时静音」；「视频封面音频」默认开启，播放卡池封面视频自带的声音；「封面视频存在音频时静音背景音乐」开启时视频原声会压掉背景音乐，关闭后两者可以同时播放（背景音乐未开启时这一项不可调整）；点「导入音乐」先选音频、再选保存位置，点「刷新」重新扫描；资源目录还没创建也能直接导入，程序会按你选的位置创建。想安静地用一次，可以用启动参数 <Run FontFamily="Consolas" Background="{DynamicResource Bg_EEEEEE}">--mute</Run> 静音启动：本次运行背景音乐与音效都不出声，配置不会因此被改掉，之后在选项里手动开关仍以手动为准。<LineBreak/>
                                 6. <Run FontWeight="Bold">选项 → 卡池</Run>：选择、新建、编辑、删除、复制卡池。<LineBreak/>
-                                7. <Run FontWeight="Bold">选项 → 系统</Run>：卡池目录（可加多个）、资源目录、截图目录、性能、功能隐藏、清理缓存、重置应用。<LineBreak/>
+                                7. <Run FontWeight="Bold">选项 → 系统</Run>：卡池目录（可加多个）、资源目录、截图目录、性能、功能隐藏、实验性功能、清理缓存、重置应用。<LineBreak/>
                                 8. <Run FontWeight="Bold">未创建目录时</Run>：卡池目录 / 资源目录只显示「未创建或添加…」占位，不显示路径和「打开文件夹」；创建后自动显示路径与「打开文件夹」。<LineBreak/>
                                 9. <Run FontWeight="Bold">视觉呈现模式</Run>：默认按电脑性能自动选择（配置较低时用「加载速度优先」，生成报告图 / PDF 更省内存），也可以手动切换。<LineBreak/>
-                                10. <Run FontWeight="Bold">低性能模式</Run>：「选项 → 系统」里切换标准 / 低性能（欢迎页最后一页也能选）；打开后报告图 / PDF 分辨率更低、每页更短，头像与封面按更小尺寸加载，历史记录「全部显示」时改为分批加载（滚到底自动续上），适合虚拟机或老电脑。<LineBreak/>
+                                10. <Run FontWeight="Bold">低性能模式</Run>：「选项 → 系统」里切换标准 / 低性能（欢迎页最后一页也能选）；打开后报告图 / PDF 分辨率更低、每页更短，头像与封面按更小尺寸加载；历史记录「大批量显示」每页 1 万条，适合虚拟机或老电脑。<LineBreak/>
                                 11. <Run FontWeight="Bold">卡池封面视频</Run>：默认播放视频自带的音频；「封面视频存在音频时静音背景音乐」可以避免两种声音叠在一起，关掉后背景音乐和视频原声同时播放。<LineBreak/>
                                 12. <Run FontWeight="Bold">截图目录</Run>：分享长图的保存位置，可直接编辑路径或点「选择文件夹」。<LineBreak/>
                                 13. <Run FontWeight="Bold">选项 → 关于</Run>：蓝色提示气泡，下面是软件名称与版本（右侧「更新日志」，第一次打开只显示当前版本，点「展开历史版本」看旧版本）、作者（右侧「B站主页」）、反馈与联系（右侧「查看」，弹窗里有反馈邮箱与 GitHub Issues 两个入口）、开源许可（右侧「查看」，含 MIT 全文与第三方说明）。<LineBreak/>
@@ -1339,7 +1377,7 @@
                             <Border Style="{StaticResource OptionsCardTitleRuleStyle}"/>
                             <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="24" Margin="0,10,0,4" Foreground="{DynamicResource Fg_HelpText}">
                                 1. <Run FontWeight="Bold">入口</Run>：「选项 → 系统 → 功能隐藏」。<LineBreak/>
-                                2. 可以隐藏「基于概率的抽取」「高级抽卡规则」「编辑卡池」「查看抽取报告」以及「功能隐藏本身」。<LineBreak/>
+                                2. 可以隐藏「基于概率的抽取」「高级抽卡规则」「编辑卡池」「查看抽取报告」「实验性功能」以及「功能隐藏本身」。<LineBreak/>
                                 3. 勾选「基于概率的抽取」会一并勾选并锁定「高级抽卡规则」；隐藏「查看抽取报告」后，主界面与历史记录页的报告入口一起消失；隐藏「编辑卡池」后，主界面右键菜单里的「编辑卡池信息」也一起消失。<LineBreak/>
                                 4. 隐藏后，在<Run FontWeight="Bold">任意界面</Run>按 F12 可临时显示 / 隐藏；重启后恢复隐藏状态。
                             </TextBlock>

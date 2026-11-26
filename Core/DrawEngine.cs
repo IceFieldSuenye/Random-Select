@@ -181,13 +181,14 @@ namespace RandomDrawer
             if (App.IsHistoryDisabled) return;
             if (pool == null || results == null || results.Count == 0) return;
 
-            string historyFile = Path.Combine(pool.Dir, "history.txt");
+            // 3.77.0-snapshot-19：统一写入卡池目录下的 History 子文件夹，单个文件满 10 000 行自动分片；
+            // 旧版本留在根目录的 history.txt 仍可读取，但不再追加。
             try
             {
-                using (StreamWriter sw = File.AppendText(historyFile))
+                using (var writer = new HistoryStreamWriter(pool.Dir, drawType))
                 {
                     foreach (var item in results)
-                        sw.WriteLine($"{DateTime.Now:yyyy/MM/dd HH:mm:ss}|{drawType}|{string.Join("\t", item.Fields)}");
+                        writer.Write(string.Join("\t", item.Fields));
                 }
             }
             catch { }

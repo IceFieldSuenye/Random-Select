@@ -24,6 +24,9 @@ namespace RandomDrawer
         private string _selectedOverlayPath = "";
         private bool _coverBlurBackground;
         private bool _coverRound;
+        // 3.77.0-snapshot-14：新建卡池时还没有目录，编辑「默认封面」的结果只能先记在内存里，
+        // 等 TrySavePool 真正创建出目录后再落盘（否则一保存就丢）。
+        private bool _useDefaultCoverEdit;
 
         public string CurrentTitle { get; private set; } = "卡池管理";
 
@@ -265,7 +268,7 @@ namespace RandomDrawer
             _personalizationSettings = new PersonalizationSettings();
 
             PoolNameBox.Text = "";
-            TxtCoverPath.Text = "未选择文件";
+            UpdateCoverHintText();
             UpdateCoverButtonText();
             ChkLock.IsChecked = false;
             TxtActiveStrategy.Visibility = Visibility.Collapsed;
@@ -384,7 +387,7 @@ namespace RandomDrawer
 
             InputBox_TextChanged(null, null);
 
-            TxtCoverPath.Text = "未选择文件";
+            UpdateCoverHintText();
             UpdateCoverButtonText();
             try
             {
@@ -400,7 +403,7 @@ namespace RandomDrawer
                 {
                     _selectedCoverPath = originalCover;
                     _selectedOverlayPath = PoolCover.GetOverlayPath(_poolAbsoluteDir);
-                    TxtCoverPath.Text = Path.GetFileName(_selectedCoverPath);
+                    UpdateCoverHintText();
                     UpdateCoverButtonText();
                 }
 
@@ -482,7 +485,7 @@ namespace RandomDrawer
             _selectedCoverPath = "";
             _coverRemoved = true;
             _isCoverChanged = true;
-            TxtCoverPath.Text = "未选择文件";
+            UpdateCoverHintText();
             UpdateCoverButtonText();
             UpdateRemoveCoverButtonVisibility();
         }
@@ -1048,7 +1051,9 @@ namespace RandomDrawer
 
         private void OnCoverEditorFinished(AppMessages.CoverEditorFinished msg)
         {
-            if (msg == null || !msg.Saved || string.IsNullOrEmpty(msg.CoverPath)) return;
+            if (msg == null || !msg.Saved) return;
+            // 3.77.0-snapshot-14：编辑「默认封面」时没有封面文件，CoverPath 为空但同样要保存。
+            if (string.IsNullOrEmpty(msg.CoverPath) && !msg.UseDefaultCover) return;
 
             // 主界面也可能打开封面编辑页：只处理「从本页发起」的结果，避免写到别的卡池
             if (!string.IsNullOrEmpty(msg.PoolDir) && !PathEquals(msg.PoolDir, _poolAbsoluteDir)) return;
@@ -1058,13 +1063,16 @@ namespace RandomDrawer
                 try
                 {
                     _selectedCoverPath = msg.CoverPath;
+                    // 3.77.0-snapshot-14：编辑的是「默认封面」时没有封面文件，记下这个状态，
+                    // 保存卡池时（目录创建之后）再写 cover_default_edit.txt + 批注层。
+                    _useDefaultCoverEdit = msg.UseDefaultCover;
                     // 3.31：视频 / GIF 的批注也保留（编辑页已按视频尺寸渲染透明批注层，主界面播放时叠加显示）
                     _selectedOverlayPath = msg.OverlayPath;   // 批注覆盖层（透明 PNG）
                     _coverBlurBackground = msg.BlurBackground;
                     _coverRound = msg.RoundCover;
                     _coverRemoved = false;
                     _isCoverChanged = true;
-                    TxtCoverPath.Text = Path.GetFileName(_selectedCoverPath);
+                    UpdateCoverHintText();
                     UpdateCoverButtonText();
                     UpdateRemoveCoverButtonVisibility();
 
@@ -1100,6 +1108,19 @@ namespace RandomDrawer
                     return;
                 }
 
+                // 3.77.0-snapshot-14：只编辑了「默认封面」（没有自己的封面文件）—— 写编辑标记 + 批注层。
+                // 新建卡池时目录还没建，这里是在 TrySavePool 建好目录之后才被调用，所以能正常落盘。
+                if (_useDefaultCoverEdit && (string.IsNullOrEmpty(_selectedCoverPath) || !File.Exists(_selectedCoverPath)))
+                {
+                    try { PoolCover.SetDefaultCoverEdit(poolDir, true); } catch { }
+                    string defaultOverlay = (!string.IsNullOrEmpty(_selectedOverlayPath) && File.Exists(_selectedOverlayPath))
+                        ? _selectedOverlayPath
+                        : "";
+                    try { PoolCover.SaveOverlay(poolDir, defaultOverlay); } catch { }
+                    try { _selectedOverlayPath = PoolCover.GetOverlayPath(poolDir); } catch { }
+                    return;
+                }
+
                 if (!_isCoverChanged || string.IsNullOrEmpty(_selectedCoverPath) || !File.Exists(_selectedCoverPath)) return;
 
                 string ext = Path.GetExtension(_selectedCoverPath).ToLowerInvariant();
@@ -1132,12 +1153,54 @@ namespace RandomDrawer
         }
 
         /// <summary>按当前是否已有封面切换按钮文案：添加封面 / 修改封面。</summary>
-        private void UpdateCoverButtonText()
+                /// <summary>
+        /// 3.77.0-snapshot-13：封面状态文案。
+        /// 没有自己的封面文件时：默认封面未被编辑过 → 提示会使用默认封面；编辑过 → 说明已编辑默认封面。
+        /// 有自己的封面文件时：显示文件名；若还有批注层，则说明已添加并编辑过。
+        /// </summary>
+        private void UpdateCoverHintText()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_selectedCoverPath) && File.Exists(_selectedCoverPath))
+                {
+                    bool edited = false;
+                    if (!string.IsNullOrEmpty(_poolAbsoluteDir) && Directory.Exists(_poolAbsoluteDir))
+                    {
+                        string ov = PoolCover.GetOverlayPath(_poolAbsoluteDir);
+                        edited = !string.IsNullOrEmpty(ov) && File.Exists(ov);
+                    }
+                    TxtCoverPath.Text = edited ? "\u5df2\u6dfb\u52a0\u5e76\u7f16\u8f91\u8fc7\u5c01\u9762" : Path.GetFileName(_selectedCoverPath);
+                    return;
+                }
+
+                bool defaultEdited = !_coverRemoved && _useDefaultCoverEdit;
+                if (!string.IsNullOrEmpty(_poolAbsoluteDir) && Directory.Exists(_poolAbsoluteDir))
+                {
+                    if (PoolCover.HasDefaultCoverEdit(_poolAbsoluteDir)) defaultEdited = true;
+                }
+
+                TxtCoverPath.Text = defaultEdited
+                    ? "\u5df2\u7f16\u8f91\u9ed8\u8ba4\u5c01\u9762\u3002"
+                    : "\u672a\u9009\u62e9\u6587\u4ef6\uff0c\u5c06\u4f7f\u7528\u9ed8\u8ba4\u5c01\u9762\u3002";
+            }
+            catch
+            {
+                TxtCoverPath.Text = "\u672a\u9009\u62e9\u6587\u4ef6\uff0c\u5c06\u4f7f\u7528\u9ed8\u8ba4\u5c01\u9762\u3002";
+            }
+        }
+
+private void UpdateCoverButtonText()
         {
             try
             {
                 bool hasCover = !_coverRemoved && !string.IsNullOrEmpty(_selectedCoverPath) && File.Exists(_selectedCoverPath);
-                if (TxtEditCoverText != null) TxtEditCoverText.Text = hasCover ? "修改封面" : "添加封面";
+                // 3.77.0-snapshot-14：编辑过默认封面也算「已有封面」，按钮文案改成「编辑封面」。
+                bool defaultEdited = false;
+                if (!string.IsNullOrEmpty(_poolAbsoluteDir) && Directory.Exists(_poolAbsoluteDir))
+                    defaultEdited = PoolCover.HasDefaultCoverEdit(_poolAbsoluteDir);
+                bool hasAnyCover = hasCover || defaultEdited || (_useDefaultCoverEdit && !_coverRemoved);
+                if (TxtEditCoverText != null) TxtEditCoverText.Text = hasAnyCover ? "\u7f16\u8f91\u5c01\u9762" : "\u6dfb\u52a0\u5c01\u9762";
                 if (BtnRemoveCover != null)
                     BtnRemoveCover.Visibility = hasCover ? Visibility.Visible : Visibility.Collapsed;
             }
@@ -1159,7 +1222,7 @@ namespace RandomDrawer
                     return;
                 }
                 _selectedCoverPath = ofd.FileName;
-                TxtCoverPath.Text = Path.GetFileName(_selectedCoverPath);
+                UpdateCoverHintText();
                 UpdateCoverButtonText();
                 _isCoverChanged = true;
                 _coverRemoved = false;

@@ -9,15 +9,15 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>Assets\app.manifest</ApplicationManifest>
-    <Version>3.76.0</Version>
+    <Version>3.77.0</Version>
     <Authors>冰原雪奈</Authors>
     <Company>冰原雪奈</Company>
     <Product>Random Select</Product>
     <PackageId>随机抽取器</PackageId>
     <Copyright>Copyright © 2026 冰原雪奈 (IceFieldSuenye)</Copyright>
     <AssemblyName>随机抽取器</AssemblyName>
-    <!-- 发布目录、源码备份目录、测试目录不参与后续编译（3.70：测试工程已从 tests\ 并到 Test\SmokeTest） -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);Release\**;backup\**;Test\**;tests\**;Pre-Delete\**</DefaultItemExcludes>
+    <!-- 发布、备份、测试、待删除目录不参与编译；Agent 只放文档与更新日志的备份副本，也一并排除 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Release\**;Release-DSH\**;backup\**;Test\**;tests\**;tests-tmp*\**;Pre-Delete\**;Agent\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,9 +31,9 @@
     <Resource Include="Assets\ico.png" />
   </ItemGroup>
 
-  <!-- 更新日志是「关于 → 更新日志」的唯一数据源，内嵌进程序集 -->
+  <!-- 更新日志是「关于 → 更新日志」的唯一数据源（Assets\更新日志.md 参与编译；Agent\更新日志.md 只是备份副本） -->
   <ItemGroup>
-    <EmbeddedResource Include="Readme\更新日志.txt" />
+    <EmbeddedResource Include="Assets\更新日志.md" />
   </ItemGroup>
 
 </Project>

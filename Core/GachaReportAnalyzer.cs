@@ -106,48 +106,15 @@ namespace RandomDrawer
             bool isBa = preset.Contains("蔚蓝");
             data.Game = isBa ? GachaGameKind.BlueArchive : GachaGameKind.HSR;
 
-            string historyFile = Path.Combine(poolDir, "history.txt");
-            if (!File.Exists(historyFile))
+            // 3.77.0-snapshot-17：历史可能拆成多个分片，改为读取全部分片
+            if (!HistoryFiles.AnyExists(poolDir))
             {
                 data.SubTitle = "该卡池还没有抽取记录";
                 return data;
             }
 
-            List<string> lines;
-            try { lines = File.ReadAllLines(historyFile).ToList(); }
-            catch { data.SubTitle = "读取历史记录失败"; return data; }
-
-            // ---------- 解析每次抽取 ----------
+            // ---------- 解析每次抽取（3.77.0-snapshot-19：流式读取，统计完一个分片就释放）----------
             int nameIndex = ResolveNameColumn(poolDir);
-            var pulls = new List<KeyValuePair<string, List<string>>>();  // 名称 → 字段
-            foreach (var line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                string body = line;
-                int firstPipe = body.IndexOf('|');
-                if (firstPipe >= 0)
-                {
-                    int secondPipe = body.IndexOf('|', firstPipe + 1);
-                    if (secondPipe < 0) continue;
-                    body = body.Substring(secondPipe + 1);
-                }
-
-                var fields = body.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                if (fields.Count == 0) continue;
-
-                string name = (nameIndex < fields.Count ? fields[nameIndex] : fields[0]).Trim();
-                if (string.IsNullOrEmpty(name)) continue;
-
-                pulls.Add(new KeyValuePair<string, List<string>>(name, fields));
-            }
-
-            data.TotalPulls = pulls.Count;
-            if (pulls.Count == 0)
-            {
-                data.SubTitle = "该卡池还没有抽取记录";
-                return data;
-            }
 
             // ---------- 稀有度分类 ----------
             string rareCat = isBa
@@ -203,38 +170,67 @@ namespace RandomDrawer
             }
 
             // ---------- 逐抽统计 ----------
+            int totalPulls = 0;
             int sinceLast = 0;
             var hits = new List<GachaReportEntry>();
 
-            for (int i = 0; i < pulls.Count; i++)
+            try
             {
-                sinceLast++;
-
-                var kv = pulls[i];
-                // ★ 5 星分类可能是「5星角色,5星光锥」这种多分类（光锥 / 群星跃迁），逐个比对
-                bool isRare = false;
-                if (!string.IsNullOrWhiteSpace(rareCat))
+                foreach (var line in HistoryFiles.EnumerateLines(poolDir))
                 {
-                    foreach (string part in rareCat.Split(new[] { ',', '，', ';', '；', '、' }, StringSplitOptions.RemoveEmptyEntries))
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    string body = line;
+                    int firstPipe = body.IndexOf('|');
+                    if (firstPipe >= 0)
                     {
-                        string cat = part.Trim();
-                        if (cat.Length == 0) continue;
-                        if (kv.Value.Any(f => string.Equals(f.Trim(), cat, StringComparison.OrdinalIgnoreCase)))
-                        { isRare = true; break; }
+                        int secondPipe = body.IndexOf('|', firstPipe + 1);
+                        if (secondPipe < 0) continue;
+                        body = body.Substring(secondPipe + 1);
                     }
+
+                    var fields = body.Split(new[] { '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (fields.Length == 0) continue;
+
+                    string name = (nameIndex < fields.Length ? fields[nameIndex] : fields[0]).Trim();
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    totalPulls++;
+                    sinceLast++;
+
+                    // ★ 5 星分类可能是「5星角色,5星光锥」这种多分类（光锥 / 群星跃迁），逐个比对
+                    bool isRare = false;
+                    if (!string.IsNullOrWhiteSpace(rareCat))
+                    {
+                        foreach (string part in rareCat.Split(new[] { ',', '，', ';', '；', '、' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            string cat = part.Trim();
+                            if (cat.Length == 0) continue;
+                            if (fields.Any(f => string.Equals(f.Trim(), cat, StringComparison.OrdinalIgnoreCase)))
+                            { isRare = true; break; }
+                        }
+                    }
+
+                    if (!isRare) continue;
+
+                    hits.Add(new GachaReportEntry
+                    {
+                        Name = name,
+                        Pulls = sinceLast,
+                        Cumulative = totalPulls,
+                        IsUp = IsUpEntry(name)
+                    });
+
+                    sinceLast = 0;
                 }
+            }
+            catch { data.SubTitle = "读取历史记录失败"; return data; }
 
-                if (!isRare) continue;
-
-                hits.Add(new GachaReportEntry
-                {
-                    Name = kv.Key,
-                    Pulls = sinceLast,
-                    Cumulative = i + 1,
-                    IsUp = IsUpEntry(kv.Key)
-                });
-
-                sinceLast = 0;
+            data.TotalPulls = totalPulls;
+            if (totalPulls == 0)
+            {
+                data.SubTitle = "该卡池还没有抽取记录";
+                return data;
             }
 
             // ---------- 头像 ----------
@@ -295,7 +291,7 @@ namespace RandomDrawer
             }
 
             // ---------- 整体判定 ----------
-            if (isBa) AnalyzeBa(data, pulls.Count);
+            if (isBa) AnalyzeBa(data, totalPulls);
             else
             {
                 // ★ 群星跃迁（常驻）没有 UP：不要再算「小保底不歪率」
@@ -312,7 +308,7 @@ namespace RandomDrawer
                     if (sum > 0) upShare = upProb / sum;
                 }
 
-                AnalyzeHsr(data, pulls.Count, data.HasUp, data.PityLimit, upShare);
+                AnalyzeHsr(data, totalPulls, data.HasUp, data.PityLimit, upShare);
             }
 
             data.HasData = hits.Count > 0;
@@ -332,8 +328,8 @@ namespace RandomDrawer
             data.PoolName = poolName ?? "";
             data.Title = "抽取次数统计";
 
-            string historyFile = Path.Combine(poolDir, "history.txt");
-            if (!File.Exists(historyFile))
+            // 3.77.0-snapshot-19：流式逐分片统计，一个文件读完立即释放
+            if (!HistoryFiles.AnyExists(poolDir))
             {
                 data.SubTitle = "该卡池还没有抽取记录";
                 return;
@@ -345,7 +341,7 @@ namespace RandomDrawer
 
             try
             {
-                foreach (var line in File.ReadAllLines(historyFile))
+                foreach (var line in HistoryFiles.EnumerateLines(poolDir))
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
 

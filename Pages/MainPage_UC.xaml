@@ -5,6 +5,18 @@
              xmlns:local="clr-namespace:RandomDrawer">
 
     <UserControl.Resources>
+        <!-- 3.77.0-snapshot-13：底部工具条按钮。开启「主页背景模糊」后底图是半透明浅色，
+             浅色主题下默认的浅灰悬浮几乎看不见，这里统一用半透明黑做悬浮加深，深浅主题都清晰。 -->
+        <Style x:Key="BottomBarButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#33000000"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#4D000000"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <!-- ★ 移除了“选中且悬浮”的覆盖触发器，保证选中状态下悬浮颜色不加深 -->
         <Style x:Key="PoolButtonStyle" TargetType="Button">
             <Setter Property="MinHeight" Value="60"/>
@@ -21,7 +33,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
+                        <!-- 3.77.0-snapshot-7：默认（纯文本）卡片也支持圆角，圆角值由 CardRadius 附加属性控制 -->
                         <Border x:Name="Bd"
+                                CornerRadius="{Binding Path=(local:MainPage_UC.CardRadius), RelativeSource={RelativeSource TemplatedParent}}"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
@@ -38,6 +52,8 @@
             <Style.Triggers>
                 <!-- 选中状态：蓝底、蓝框、蓝字 -->
                 <Trigger Property="local:MainPage_UC.IsSelected" Value="True">
+                    <!-- 3.77.0-snapshot-9：默认（纯文字）卡片的选中蓝框也加粗，和缩略图卡片一致 -->
+                    <Setter Property="BorderThickness" Value="2"/>
                     <Setter Property="Background" Value="{DynamicResource Bg_E5F3FF}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource Bd_0078D7}"/>
                     <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
@@ -113,7 +129,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
+                        <!-- 3.77.0-snapshot-7：亚克力卡片同样支持圆角 -->
                         <Border x:Name="Bd"
+                                CornerRadius="{Binding Path=(local:MainPage_UC.CardRadius), RelativeSource={RelativeSource TemplatedParent}}"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
@@ -129,6 +147,8 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="local:MainPage_UC.IsSelected" Value="True">
+                    <!-- 3.77.0-snapshot-9：亚克力样式同样把选中蓝框加粗 -->
+                    <Setter Property="BorderThickness" Value="2"/>
                     <Setter Property="Background" Value="#3D0078D7"/>
                     <Setter Property="BorderBrush" Value="#B30078D7"/>
                     <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
@@ -143,6 +163,47 @@
                     <Setter Property="Foreground" Value="{DynamicResource Fg_0078D7}"/>
                 </MultiTrigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- 3.77：卡池卡片缩略图样式 —— 图片铺满整张卡片（圆角由 CardRadius 决定），
+             边框颜色 / 圆角都由代码按卡池设置写入，悬浮跟随主题色，选中时循环渐变。 -->
+        <Style x:Key="ThumbPoolButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Background" Value="{DynamicResource Bg_F0F0F0}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Bd_CCCCCC}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <!-- 3.77.0-snapshot-6：图片层单独一层并加圆角裁剪，
+                                 边框层不裁剪 —— 否则选中 / 悬浮时圆角处的边框会被切掉，四个角缺一块。 -->
+                            <Border x:Name="CardBg" ClipToBounds="True"
+                                    CornerRadius="{Binding Path=(local:MainPage_UC.CardRadius), RelativeSource={RelativeSource TemplatedParent}}"
+                                    Background="{TemplateBinding Background}"
+                                    SnapsToDevicePixels="True"/>
+                            <Border x:Name="Bd"
+                                    CornerRadius="{Binding Path=(local:MainPage_UC.CardRadius), RelativeSource={RelativeSource TemplatedParent}}"
+                                    Background="Transparent"
+                                    BorderBrush="{Binding Path=(local:MainPage_UC.CardBorderBrush), RelativeSource={RelativeSource TemplatedParent}}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                    SnapsToDevicePixels="True"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- 「查看抽取报告」默认样式（原来内联在按钮里；切亚克力时需要能还原）
@@ -531,7 +592,9 @@
             </StackPanel>
 
                 <!-- ★ 给 StackPanel 添加右侧 Margin，让按钮和滚动条之间产生 10px 的间隔 -->
-                <ScrollViewer PanningMode="VerticalOnly" Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                <!-- ★ 3.77.0-snapshot-7：滚动条改为常驻（Visible），否则缩略图卡片高度变化会让滚动条
+                     反复出现/消失，导致列表宽度来回变化、卡片高度跟着跳 —— 也就是「返回主页时列表抽搐」。 -->
+                <ScrollViewer x:Name="PoolScrollViewer" PanningMode="VerticalOnly" Grid.Row="2" VerticalScrollBarVisibility="Auto"
                               Background="Transparent"
                               PreviewMouseRightButtonDown="PoolListBlank_PreviewMouseRightButtonDown">
                     <StackPanel Name="PoolButtonsPanel" Margin="0,0,10,0"/>
@@ -664,14 +727,14 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Button Name="BtnOptions" VerticalAlignment="Center" Width="100" Height="40" Margin="0,0,10,0" Click="BtnOptions_Click">
+                <Button Name="BtnOptions" Style="{StaticResource BottomBarButtonStyle}" VerticalAlignment="Center" Width="100" Height="40" Margin="0,0,10,0" Click="BtnOptions_Click">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE713;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="选项" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
 
-                <Button Name="BtnHistory" VerticalAlignment="Center" Width="120" Height="40" Grid.Column="1" Margin="0,0,10,0" Click="BtnHistory_Click">
+                <Button Name="BtnHistory" Style="{StaticResource BottomBarButtonStyle}" VerticalAlignment="Center" Width="120" Height="40" Grid.Column="1" Margin="0,0,10,0" Click="BtnHistory_Click">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE81C;" FontFamily="{StaticResource AppIconFont}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="历史记录" VerticalAlignment="Center"/>
@@ -703,9 +766,20 @@
                                            Foreground="{DynamicResource Fg_000000}"/>
                             </StackPanel>
                             <Grid Height="20">
+                                <!-- 3.77.0-snapshot-16：「本次抽取次数」前补 mail 图标（详细布局）
+                                     3.77.0-snapshot-17：图标改成文字对文字对齐——「本次抽取次数」与上方「不重复抽取」左对齐
+                                     3.77.0-snapshot-18：信封再往左，与上方开关的中心对齐——
+                                     开关缩放后视觉宽约 21（35×0.6），所以图标容器取 26.4 居中再左移 2；
+                                     文字从 29 起（开关 21 + 间距 8），与「不重复抽取」首字对齐 -->
+                                <Grid Width="26.4" Margin="-2,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE715;" FontFamily="{StaticResource AppIconFont}"
+                                               FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Fg_000000}"/>
+                                </Grid>
                                 <TextBlock Name="TxtDrawCountNormal" Text="本次抽取次数：0" FontSize="13"
-                                           Margin="34,0,0,0" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource Fg_000000}" HorizontalAlignment="Left"/>
+                                           Margin="29,0,0,0" HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Fg_000000}"/>
                             </Grid>
                         </StackPanel>
 
@@ -744,6 +818,11 @@
                         <!-- 3.76：蔚蓝档案（新/旧）在详细布局下只显示「招募积分/点数」一行，
                              其余数据收进「抽取详情」面板；其他高级卡池仍是多行 -->
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- 3.77.0-snapshot-15：累计抽取次数前补 mail 图标（详细布局） -->
+                            <TextBlock Text="&#xE715;" FontFamily="{StaticResource AppIconFont}"
+                                       FontSize="13" Width="16" TextAlignment="Center"
+                                       VerticalAlignment="Center" Margin="0,0,4,0"
+                                       Foreground="{DynamicResource Fg_000000}"/>
                             <TextBlock Name="TxtDrawCountAdvanced" Text="累计抽取次数：0" FontSize="13" Foreground="{DynamicResource Fg_000000}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                             <Button Name="BtnAdvancedStats" Margin="10,0,0,0" Height="32" Padding="8,0"
                                     VerticalAlignment="Center" Click="BtnAdvancedStats_Click"
@@ -862,7 +941,7 @@
 
                     <!-- 查看抽取报告（仅启用高级抽卡规则的卡池显示，无边框样式） -->
 
-                    <Button Name="BtnDraw1" VerticalAlignment="Center" Grid.Row="0" Grid.Column="2" Width="120" Height="40" Click="BtnDraw1_Click">
+                    <Button Name="BtnDraw1" Style="{StaticResource BottomBarButtonStyle}" VerticalAlignment="Center" Grid.Row="0" Grid.Column="2" Width="120" Height="40" Click="BtnDraw1_Click">
                         <Button.RenderTransform>
                             <TranslateTransform/>
                         </Button.RenderTransform>
@@ -877,7 +956,7 @@
 
 
 
-                <Button Name="BtnDrawMulti" VerticalAlignment="Center" Grid.Column="4" Width="120" Height="40" Click="BtnDrawMulti_Click">
+                <Button Name="BtnDrawMulti" Style="{StaticResource BottomBarButtonStyle}" VerticalAlignment="Center" Grid.Column="4" Width="120" Height="40" Click="BtnDrawMulti_Click">
                     <Button.RenderTransform>
                         <TranslateTransform/>
                     </Button.RenderTransform>

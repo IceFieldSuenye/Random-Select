@@ -80,11 +80,11 @@
                 </Button>
 
                 <Button Name="BtnViewMode" Width="96" Height="28" Margin="0,0,8,0" Click="BtnViewMode_Click"
-                        ToolTip="在「按页查看」与「全部显示」之间切换">
+                        ToolTip="在「按页查看」与「大批量显示（每页 1 万条）」之间切换">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Name="TxtViewModeIcon" Text="&#xE7C3;" FontFamily="{StaticResource AppIconFont}"
                                    FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock Name="TxtViewMode" Text="按页查看" VerticalAlignment="Center"/>
+                        <TextBlock Name="TxtViewMode" Text="大批量显示" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
 

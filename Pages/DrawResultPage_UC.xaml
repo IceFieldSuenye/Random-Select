@@ -26,6 +26,41 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- 3.77.0-snapshot-17：结果分页箭头（与历史记录页保持一致） -->
+        <Style x:Key="PagerArrowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource Fg_1F2937}"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_E5E7EB}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Bg_D1D5DB}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource Fg_9CA3AF}"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <!-- ★ 修复：给根节点加上 x:Name，以便在后台代码中动态设置背景 -->
@@ -40,7 +75,7 @@
         <ScrollViewer x:Name="ResultScrollViewer" PanningMode="VerticalOnly"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
-                      Margin="20,70,20,90">
+                      Margin="20,70,20,140">
             <Grid x:Name="CardsHost"
                   HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch">
@@ -60,6 +95,50 @@
             </ScrollBar.Resources>
         </ScrollBar>
 
+
+        <!-- 3.77.0-snapshot-17：大量结果按页渲染，底部居中翻页（样式取自历史记录页） -->
+        <StackPanel x:Name="PagerPanel" Orientation="Horizontal"
+                    Panel.ZIndex="40"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,18"
+                    Visibility="Collapsed">
+            <Button Name="BtnPrevPage" Style="{StaticResource PagerArrowButtonStyle}"
+                    Click="PrevPage_Click" ToolTip="上一页"
+                    AutomationProperties.Name="上一页">
+                <TextBlock Text="&#xE72B;"
+                           FontFamily="{StaticResource AppIconFont}"
+                           FontSize="16"/>
+            </Button>
+
+            <!-- 3.77.0-snapshot-19：页码改成可直接输入的文本框，回车跳转；snapshot-20：宽度随页数自适应 -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                <TextBlock Text="第" FontSize="13"
+                           Foreground="{DynamicResource Fg_6B7280}"
+                           VerticalAlignment="Center"/>
+                <TextBox x:Name="TxtPageInput"
+                         MinWidth="52" Height="24" Margin="6,0"
+                         Padding="4,0"
+                         FontSize="13" TextAlignment="Center"
+                         VerticalContentAlignment="Center"
+                         Background="{DynamicResource Bg_FFFFFF}"
+                         BorderBrush="{DynamicResource Bd_E5E7EB}"
+                         Foreground="{DynamicResource Fg_000000}"
+                         KeyDown="TxtPageInput_KeyDown"
+                         GotFocus="TxtPageInput_GotFocus"
+                         LostFocus="TxtPageInput_LostFocus"/>
+                <TextBlock x:Name="TxtPageTotal" Text="页 / 共 1 页" FontSize="13"
+                           Foreground="{DynamicResource Fg_6B7280}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <Button Name="BtnNextPage" Style="{StaticResource PagerArrowButtonStyle}"
+                    Click="NextPage_Click" ToolTip="下一页"
+                    AutomationProperties.Name="下一页">
+                <TextBlock Text="&#xE72A;"
+                           FontFamily="{StaticResource AppIconFont}"
+                           FontSize="16"/>
+            </Button>
+        </StackPanel>
 
         <StackPanel x:Name="ButtonBar" Orientation="Horizontal"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
